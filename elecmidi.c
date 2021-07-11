@@ -351,6 +351,10 @@ int readInteger(char *line, char **remain){
   char *token;
   int n;
   token=strtok_r(line," ",remain);
+  if(!token) {
+    printError("Error reading integer","\n");
+    exit(1);
+  }
   n=atoi(token);
 
   return n;
@@ -526,10 +530,41 @@ int readName(char *line) {
     return 0;
 }
 
+long int readRange(char *line){
+  char *token;
+  char *number1;
+  char *number2;
+  int n1;
+  int n2;
+  long int range=0;
+  if(line[0]=='@') {
+
+    line++;
+    token=strtok_r(line,",",&line);
+    while(token) {
+      number1=strtok_r(token,"-",&token);
+      number2=token;
+      n1=atoi(number1);
+      if(number2[0]==0) {
+        n2=n1;
+      } else {
+        n2=atoi(number2);
+      }
+      for(int i=n1;i<=n2;i++) {
+            range |= (1<< (i-1)); 
+      } 
+      token=strtok_r(line,",",&line);
+    }
+    return range;
+  } else {
+    return 0xFFFFFFFFFFFFFFFF;
+  }
+}
+
 int readGateTime(char *line) {
   int part;
   int gt;
-  int step0=1;
+  long int range=0xFFFFFFFFFFFFFFFF;
   char *remain;
 
   part=readPart(line,&remain);
@@ -537,8 +572,14 @@ int readGateTime(char *line) {
     return -1;
   }
   jumpBlanks(&remain);
-  step0=readStep0(remain,&remain);
-  if(step0==-1) {
+  char *token=strtok_r(remain," ",&remain);
+  if(remain[0]==0) { //last number
+    remain=token;
+  } else {
+    range=readRange(token);
+  }
+
+  if(range==0) {
     return -2;
   }
   gt=readInteger(remain,&remain);
@@ -546,8 +587,46 @@ int readGateTime(char *line) {
     printError("Error in Gate Time","");
     return -1;
   }
-  for(int i=step0-1; i<64; i++) {
-    dd.part[part-1].step[i].gateTime=gt;
+  for(int i=0; i<64; i++) {
+    if(range & 1) {
+      dd.part[part-1].step[i].gateTime=gt;
+    }
+    range=range>>1;
+  }
+  return 0;
+}
+
+int readVelocity(char *line) {
+  int part;
+  int v;
+  long int range=0xFFFFFFFFFFFFFFFF;
+  char *remain;
+
+  part=readPart(line,&remain);
+  if(part==-1) {
+    return -1;
+  }
+  jumpBlanks(&remain);
+  char *token=strtok_r(remain," ",&remain);
+  if(remain[0]==0) { //last number
+    remain=token;
+  } else {
+    range=readRange(token);
+  }
+
+  if(range==0) {
+    return -2;
+  }
+  v=readInteger(remain,&remain);
+  if(v==0) {
+    printError("Error in Velocity","");
+    return -1;
+  }
+  for(int i=0; i<64; i++) {
+    if(range & 1) {
+      dd.part[part-1].step[i].velocity=v;
+    }
+    range=range>>1;
   }
   return 0;
 }
@@ -663,6 +742,8 @@ int readLine(char *line) {
      return readName(remain);
   } else if(0==strncmp(command,"gateTime",2)) {
      return readGateTime(remain);
+  } else if(0==strncmp(command,"velocity",2)) {
+     return readVelocity(remain);
   } else if(0==strncmp(command,"lastStep",2)) {
      return readLastStep(remain);
   } else if(0==strncmp(command,"length",2)) {
@@ -711,7 +792,6 @@ int i=0;
     c=getchar();
   }
   
-  //dd.name[0]=32;  //<127&& >=32
   currentPatternDataSend();
   sendRealtimeMesagge(0xfa); //start 
   return 0;

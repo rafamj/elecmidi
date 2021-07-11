@@ -3,9 +3,12 @@ length 2
 
 #sets the gate time of all steps in part 1
 gateTime 1 70
-#sets the gate time from the pos 5
-gateTime 1 @5 7
-gateTime 1 @9 80 
+#sets the gate time from the steps 7,9,10 
+gateTime 1 @7,9-10 17
+gateTime 1 @15 80 
+
+velocity 1 90
+velocity 1 @1,5,9,13 120
 
 lastStep 1 16
 #pattern for part 1 *=on x=off _=tie X=xxxx
