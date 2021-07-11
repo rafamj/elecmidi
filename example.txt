@@ -1,0 +1,12 @@
+name Test
+#sets the gate time of all steps in part 1
+gateTime 1 70
+#pattern for part 1 *=on x=off _=tie
+pattern 1 *_x* *x*x *x*x *x*x   X **** X **** 
+#notes for part 1:
+#A5=A, octave 5. 
+#g is tied with A5 (see pattern above). g=G
+#C^=C, one octave up. 
+#Cv=C, one octave down. 
+#D+= D sharp (- = flat)
+notes 1 A5 g B5    C^ D   D+ Cv  B A    C6 d e f  c d e f
