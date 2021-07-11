@@ -150,7 +150,7 @@ void processPattern(struct DataDumpType *dd) {
    printf("Alternate 15-16 %s\n",offOn2String(dd->alternate1516));
    printf("Master FX %d\n",dd->masterFX[1]);
 //gate time TIE=255
-   int last=1;
+   int last=2;
    for(int i=0;i<last;i++) {
      printf("OnOff\n");
      for(int s=0; s<16; s++) {
@@ -406,6 +406,7 @@ int readStepNotes(char *notes,int part,int step){
   int alt;
   char c;
 
+
   if(notes[0]=='.') {
     return step;
   }
@@ -524,20 +525,57 @@ int readName(char *line) {
 int readGateTime(char *line) {
   int part;
   int gt;
+  int step0=1;
   char *remain;
 
   part=readPart(line,&remain);
   if(part==-1) {
     return -1;
   }
+  jumpBlanks(&remain);
+  step0=readStep0(remain,&remain);
+  if(step0==-1) {
+    return -2;
+  }
   gt=readInteger(remain,&remain);
   if(gt==0) {
     printError("Error in Gate Time","");
     return -1;
   }
-  for(int i=0; i<64; i++) {
+  for(int i=step0-1; i<64; i++) {
     dd.part[part-1].step[i].gateTime=gt;
   }
+  return 0;
+}
+
+int readLength(char *line) {
+  int length;
+  char *remain;
+
+  length=readInteger(line,&remain);
+  if(length<1 || length>4) {
+    printError("Error in length","");
+    return -1;
+  }
+  dd.length=length-1;
+  return 0;
+}
+
+int readLastStep(char *line) {
+  int part;
+  int lst;
+  char *remain;
+
+  part=readPart(line,&remain);
+  if(part==-1) {
+    return -1;
+  }
+  lst=readInteger(remain,&remain);
+  if(lst<1 || lst>16) {
+    printError("Error in last Step","");
+    return -1;
+  }
+  dd.part[part-1].lastStep=lst%16;
   return 0;
 }
 
@@ -561,10 +599,8 @@ void putSilence(int part, int step) {
 void putTie(int part, int step) {
   //printf("tie %d %d\n",part,step);
   dd.part[part].step[step].gateTime=127;
-  /*
   step=(step+1)%64;
   dd.part[part].step[step].onOff=1;
-  */
 }
 
 int putSymbolInPattern(int part, int step, char symbol) {
@@ -614,20 +650,23 @@ int readLine(char *line) {
   char *remain;
 
   command=strtok_r(line," ",&remain);
-  if(command) {
-    if(0==strncmp(command,"pattern",2)) {
-       return readPattern(remain);
-    } else if(0==strncmp(command,"notes",2)) {
-       return readNotes(remain);
-    } else if(0==strncmp(command,"name",2)) {
-       return readName(remain);
-    } else if(0==strncmp(command,"gateTime",2)) {
-       return readGateTime(remain);
-    } else if(command[0]=='#') { //comment
-       return 0;
-    } else {
-      return printf("command %s not defined\n",command);
-    }
+  if(!command) return 0; //blank line
+  if(0==strncmp(command,"pattern",2)) {
+     return readPattern(remain);
+  } else if(0==strncmp(command,"notes",2)) {
+     return readNotes(remain);
+  } else if(0==strncmp(command,"name",2)) {
+     return readName(remain);
+  } else if(0==strncmp(command,"gateTime",2)) {
+     return readGateTime(remain);
+  } else if(0==strncmp(command,"lastStep",2)) {
+     return readLastStep(remain);
+  } else if(0==strncmp(command,"length",2)) {
+     return readLength(remain);
+  } else if(command[0]=='#') { //comment
+     return 0;
+  } else {
+    return printf("command %s not defined\n",command);
   }
   return -1;
 }

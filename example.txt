@@ -1,7 +1,14 @@
 name Test
+length 2
+
 #sets the gate time of all steps in part 1
 gateTime 1 70
-#pattern for part 1 *=on x=off _=tie
+#sets the gate time fron the pos 5
+gateTime 1 @5 7
+gateTime 1 @9 80 
+
+lastStep 1 16
+#pattern for part 1 *=on x=off _=tie X=xxxx
 pattern 1 *_x* *x*x *x*x *x*x   X **** X **** 
 #notes for part 1:
 #A5=A, octave 5. 
@@ -9,4 +16,12 @@ pattern 1 *_x* *x*x *x*x *x*x   X **** X ****
 #C^=C, one octave up. 
 #Cv=C, one octave down. 
 #D+= D sharp (- = flat)
-notes 1 A5 g B5    C^ D   D+ Cv  B A    C6 d e f  c d e f
+notes 1 A2 g B    C^ D   D+ Cv  B A    C^ d e f  c d e f
+
+
+gateTime 2 90
+lastStep 2 16
+pattern 2 *___ X *___ X X X  **** 
+notes 2 d3fa dfa dfa dfa     egb egb egb egb
+#@15 -> start inserting in the position 15
+notes 2 @15 g4ba^ g4ba^ g4ba^ g4ba^
