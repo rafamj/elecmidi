@@ -1,4 +1,4 @@
-elecmidi is a C program to help write electribe patterns. It connects with the electribe and modifies the current pattern.
+elecmidi is a C program to help write electribe 2 patterns. It connects with the electribe 2 and modifies the current pattern.
 
 compilation:
   In the text of elecmidi.c, at the beginning are defined:
