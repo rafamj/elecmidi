@@ -500,7 +500,11 @@ int readNotes(char *line) {
         printf("Error in notes %s\n",line);
         return -4;
       }
+      char *ant=token;
       token=strtok_r(remain," ",&remain);
+      if(token && token[0]=='=') { //repeat the same notes
+        token=ant;
+      }
   }
 }
 

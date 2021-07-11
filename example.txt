@@ -3,7 +3,7 @@ length 2
 
 #sets the gate time of all steps in part 1
 gateTime 1 70
-#sets the gate time fron the pos 5
+#sets the gate time from the pos 5
 gateTime 1 @5 7
 gateTime 1 @9 80 
 
@@ -16,12 +16,13 @@ pattern 1 *_x* *x*x *x*x *x*x   X **** X ****
 #C^=C, one octave up. 
 #Cv=C, one octave down. 
 #D+= D sharp (- = flat)
-notes 1 A2 g B    C^ D   D+ Cv  B A    C^ d e f  c d e f
+notes 1 A1 g B    C^ D   D+ Cv  B A    C^ d e f  c d e f
 
 
 gateTime 2 90
 lastStep 2 16
 pattern 2 *___ X *___ X X X  **** 
-notes 2 d3fa dfa dfa dfa     egb egb egb egb
+# = repeat the last notes
+notes 2 d3af^  = = =     e3bg^ = = =  
 #@15 -> start inserting in the position 15
-notes 2 @15 g4ba^ g4ba^ g4ba^ g4ba^
+notes 2 @15 g4a^b = = = =
