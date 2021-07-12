@@ -20,7 +20,7 @@ pattern 1 *_x* *x*x *x*x *x*x   X **** X ****
 #Cv=C, one octave down. 
 #D+= D sharp (- = flat)
 notes 1 A1 g B    C^ D   D+ Cv  B A    C^ d e f  c d e f
-
+transpose 1 @1-6 -3
 
 gateTime 2 90
 lastStep 2 16
@@ -29,3 +29,4 @@ pattern 2 *___ X *___ X X X  ****
 notes 2 d3af^  = = =     e3bg^ = = =  
 #@15 -> start inserting in the position 15
 notes 2 @15 g4a^b = = = =
+transpose 2     3

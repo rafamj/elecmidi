@@ -391,7 +391,9 @@ int readStep0(char *line, char **remain){
 }
 
 void jumpBlanks(char **line) {
-  while (**line==' ' || **line=='\t') *line++;
+  while (**line!=0 && (**line==' ' || **line=='\t')){
+    (*line)++;
+  }
 }
 
 int note2midi(char note, int octave, int alt) {
@@ -631,6 +633,46 @@ int readVelocity(char *line) {
   return 0;
 }
 
+int readTranspose(char *line) {
+  int part;
+  int tr;
+  long int range=0xFFFFFFFFFFFFFFFF;
+  char *remain;
+
+  part=readPart(line,&remain);
+  if(part==-1) {
+    return -1;
+  }
+  jumpBlanks(&remain);
+  char *token=strtok_r(remain," ",&remain);
+  if(remain[0]==0) { //last number
+    remain=token;
+  } else {
+    range=readRange(token);
+  }
+
+  if(range==0) {
+    return -2;
+  }
+  tr=readInteger(remain,&remain);
+  if(tr==0) {
+    printError("Error in Transpose","");
+    return -1;
+  }
+  for(int i=0; i<64; i++) {
+    if(range & 1) {
+      for(int n=0;n<4;n++) {
+        if(dd.part[part-1].step[i].note[n]) {
+	  //printf("part %d step %d note %d tr %d\n",part,i,n,tr);
+          dd.part[part-1].step[i].note[n]+=tr;
+	}
+      }
+    }
+    range=range>>1;
+  }
+  return 0;
+}
+
 int readLength(char *line) {
   int length;
   char *remain;
@@ -748,6 +790,8 @@ int readLine(char *line) {
      return readLastStep(remain);
   } else if(0==strncmp(command,"length",2)) {
      return readLength(remain);
+  } else if(0==strncmp(command,"transpose",2)) {
+     return readTranspose(remain);
   } else if(command[0]=='#') { //comment
      return 0;
   } else {
@@ -771,8 +815,8 @@ char lineBuffer[MAX_LINE];
 char lineBufferCopy[MAX_LINE];
 int i=0;
 
-  sendRealtimeMesagge(0xfc); //stop
-  currentPatternDataDump();
+  //sendRealtimeMesagge(0xfc); //stop
+  //currentPatternDataDump();
   
   char c=getchar();
   while(c!=EOF) {
@@ -792,7 +836,7 @@ int i=0;
     c=getchar();
   }
   
-  currentPatternDataSend();
-  sendRealtimeMesagge(0xfa); //start 
+  //currentPatternDataSend();
+  //sendRealtimeMesagge(0xfa); //start 
   return 0;
 }
