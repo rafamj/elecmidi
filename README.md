@@ -10,7 +10,7 @@ channel: the midi channel.
 
 usage:
 
-echo "<command>" | ./electmidi
+echo "command" | ./electmidi
 or
 cat script | ./electmidi
 
