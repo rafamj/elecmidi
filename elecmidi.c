@@ -815,8 +815,8 @@ char lineBuffer[MAX_LINE];
 char lineBufferCopy[MAX_LINE];
 int i=0;
 
-  //sendRealtimeMesagge(0xfc); //stop
-  //currentPatternDataDump();
+  sendRealtimeMesagge(0xfc); //stop
+  currentPatternDataDump();
   
   char c=getchar();
   while(c!=EOF) {
@@ -836,7 +836,7 @@ int i=0;
     c=getchar();
   }
   
-  //currentPatternDataSend();
-  //sendRealtimeMesagge(0xfa); //start 
+  currentPatternDataSend();
+  sendRealtimeMesagge(0xfa); //start 
   return 0;
 }
