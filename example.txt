@@ -1,32 +1,49 @@
 name Test
-length 2
+length 4
+
+#parts. The first parameter indicates the part(s)
+lastStep 1-4 16
 
 #sets the gate time of all steps in part 1
 gateTime 1 70
-#sets the gate time from the steps 7,9,10 
+
+#sets the gate time for the steps 7,9,10 
 gateTime 1 @7,9-10 17
 gateTime 1 @15 80 
 
 velocity 1 90
 velocity 1 @1,5,9,13 120
 
-lastStep 1 16
 #pattern for part 1 *=on x=off _=tie X=xxxx
-pattern 1 *_x* *x*x *x*x *x*x   X **** X **** 
+pattern 1   *_x* *x*x *x*x *x*x   X **** X 
+#start at step 29
+pattern 1 @29 ****
+
 #notes for part 1:
 #A5=A, octave 5. 
 #g is tied with A5 (see pattern above). g=G
 #C^=C, one octave up. 
 #Cv=C, one octave down. 
 #D+= D sharp (- = flat)
-notes 1 A1 g B    C^ D   D+ Cv  B A    C^ d e f  c d e f
+notes 1     A1 g B    C^ D   D+ Cv  B A    C^ d e f  c d e f
+
 transpose 1 @1-6 -3
 
-gateTime 2 90
-lastStep 2 16
-pattern 2 *___ X *___ X X X  **** 
-# = repeat the last notes
-notes 2 d3af^  = = =     e3bg^ = = =  
-#@15 -> start inserting in the position 15
-notes 2 @15 g4a^b = = = =
-transpose 2     3
+
+
+gateTime 2-3 90
+velocity 2-3 80
+
+pattern 2-3 *___ X *___ X         X X ****  **** 
+
+#d3af^, e3bg^ are chords
+# = repeat the previous note or chord
+notes 2-3 d3af^  = = =     e3bg^ = = =  
+#@25 -> start inserting at step 25 
+# =*7 is equivalent to = = =   = = = =
+notes 2-3 @25 g4a^b =*7
+
+transpose 2     1
+
+#prints the data to stdout
+print 1,2,4
