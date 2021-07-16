@@ -212,11 +212,17 @@ int printPart(int part) {
      printf("\n");
 
      for(int n=0;n-4;n++) {
-       printf("#notes %d ", n);
-       for(int s=0; s<64; s++) {
-         if(dd.part[part].step[s].onOff==1) {
+       printf("#notes %d     ", n+1);
+       for(int s=0; s<32; s++) {
+         if(s%4==0) printf("  ");
+         if(s%16==0) printf("  ");
            printf("%2d ",dd.part[part].step[s].note[n]);
-         }
+       }
+       printf("\n#notes %d @33 ", n+1);
+       for(int s=32; s<64; s++) {
+         if(s%4==0) printf("  ");
+         if(s%16==0) printf("  ");
+           printf("%2d ",dd.part[part].step[s].note[n]);
        }
        printf("\n");
      }
@@ -258,6 +264,7 @@ int printPattern(char *line) {
     }
    printf("name %s\n",dd.name);
    printf("length %x\n",dd.length+1);
+   printf("\n");
    /*
    int tt=dd->tempo1+256*dd->tempo2;
    printf("tempo %d.%d\n", tt/10,tt%10);
@@ -514,27 +521,24 @@ int readStepNotes(char *notes,int part,int step){
       step++; //search first non silence note
     }
     if(step<64) {
+      //printf("putting note %d %d\n",n,midiNote); 
       dd.part[part].step[step].note[n]=midiNote;
     }
     n++;
   }
-/*  
-  while(dd.part[part].step[step-1].gateTime>96 && dd.part[part].step[step-1].onOff==1 && step<64) {
-    if(step<64) {
-      for(n=0;n<4;n++) {
-        s=
-        dd.part[part].step[step-1].note[n]=midiNote;
-      }
-    }
-    step++;
-  }
-*/ 
   step++;
   return step;
 }
 
 int readRepeat(char **s) {
-  return readInteger(*s, s);
+  char *remain;
+
+  *s=strtok_r(*s,"*",&remain);
+  if(remain[0]==0) {
+    return 1;
+  } else {
+    return readInteger(remain, &remain);
+  }
 }
 
 int readNotes(char *line) {
@@ -558,12 +562,14 @@ int readNotes(char *line) {
   }
 
   token=strtok_r(remain," ",&remain);
+  repeat=readRepeat(&token);
   for(int i=0;i<16;i++) { 
     step[i]=step0-1;
   }
   int ok=1;
   int origPartRange=partRange;
   while(token!=NULL && ok) {
+    while(repeat--) {
       partRange=origPartRange;
       for(int part=0; part<16; part++) {
         if(partRange&1) {
@@ -578,23 +584,15 @@ int readNotes(char *line) {
         }
         partRange=partRange>>1;	
       }
-      char *ant=token;
-      token=strtok_r(remain," ",&remain);
-      if((token && token[0]=='=') || repeat>1) { //repeat the same notes
-        if(repeat>1) {
-	  repeat--;
-	} else {
-          if(token[1]=='*') {
-            token +=2;          
-	    repeat=readRepeat(&token);
-	  } else {
-	    repeat=1;
-	  }
-	}
-	if(repeat>0) {
-          token=ant;
-	}
+    }
+    char *ant=token;
+    token=strtok_r(remain," ",&remain);
+    if(token) {
+      repeat=readRepeat(&token);
+      if(token[0]=='=') {
+        token=ant;
       }
+    }
   }
   return 0;
 }
@@ -915,12 +913,48 @@ void sendRealtimeMesagge(unsigned char m){
    fclose(f);
 }
 
-int main(void) {
+int readArguments(int argc, char *argv[]) {
+  int n=1;
+  while(n<argc) {
+    if(strcmp(argv[n],"-d")==0) {
+      if(strcmp(argv[n+1],"0")==0) {
+        device=0;
+      } else {
+        device=argv[n+1];
+      }
+      n+=2;
+    } else if(strcmp(argv[n],"-c")==0) {
+      channel=atoi(argv[n+1]);
+      if(channel>0 && channel<=16) {
+        channel--;
+      } else {
+        printError("channel must be between 1 and 16 ",argv[n+1]);
+	return -1;
+      }
+
+      n+=2;
+    } else {
+      printError("Wrong argument ",argv[n]);
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+int main(int argc, char *argv[]) {
 char lineBuffer[MAX_LINE];
 int i=0;
+int res;
 
-  sendRealtimeMesagge(0xfc); //stop
-  currentPatternDataDump();
+  res=readArguments(argc,argv);
+  if(res<0) {
+    exit(1);
+  }
+  if(device!=0) {
+    sendRealtimeMesagge(0xfc); //stop
+    currentPatternDataDump();
+  }
   
   char c=getchar();
   while(c!=EOF) {
@@ -930,7 +964,7 @@ int i=0;
     if(c=='\n' || c==EOF) {
       lineBuffer[i-1]=0;
       strcpy(lineBufferCopy,lineBuffer);
-      int res=readLine(lineBuffer);
+      res=readLine(lineBuffer);
       if(res!=0){
         printError(":: ",lineBufferCopy);
         exit(1);
@@ -940,7 +974,9 @@ int i=0;
     c=getchar();
   }
   
-  currentPatternDataSend();
-  sendRealtimeMesagge(0xfa); //start 
+  if(device!=0) {
+    currentPatternDataSend();
+    sendRealtimeMesagge(0xfa); //start 
+  }
   return 0;
 }

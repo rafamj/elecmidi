@@ -15,3 +15,7 @@ or
 cat script | ./electmidi
 
 example.txt is an example script
+
+Command line arguments:
+-d device  (with -d 0 the program doesn't connect to any device)
+-c channel  (1-16)

@@ -18,6 +18,7 @@ velocity 1 @1,5,9,13 120
 pattern 1   *_x* *x*x *x*x *x*x   X **** X 
 #start at step 29
 pattern 1 @29 ****
+pattern 1 @33  *_x* *x*x *x*x *x*x   X **** X 
 
 #notes for part 1:
 #A5=A, octave 5. 
@@ -26,6 +27,7 @@ pattern 1 @29 ****
 #Cv=C, one octave down. 
 #D+= D sharp (- = flat)
 notes 1     A1 g B    C^ D   D+ Cv  B A    C^ d e f  c d e f
+notes 1 @33    A1 g B    C^ D   D+ Cv  B A    C^ d e f  c d e f
 
 transpose 1 @1-6 -3
 
@@ -45,5 +47,14 @@ notes 2-3 @25 g4a^b =*7
 
 transpose 2     1
 
+gateTime 4 90
+velocity 4 80
+pattern 4      ____ ____ ____ ____ 
+pattern 4  @17 ____ ____ ____ ____ 
+pattern 4  @33 ____ ____ ____ ____ 
+pattern 4  @49 ____ ____ ____ ____ 
+
+notes 4       d2f^*16     e2g^*16
+notes 4 @33   d2f^  =*15     e2g^ =*15
 #prints the data to stdout
-print 1,2,4
+print 1-4
