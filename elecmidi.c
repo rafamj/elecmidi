@@ -16,6 +16,72 @@ int octave=4;
 unsigned char ioBuffer[TRACK_SIZE+10]; //10=room for the header + EOX
 char lineBufferCopy[MAX_LINE];
 
+
+void printError(char *e1,char *e2) {
+  printf("%s %s\n",e1,e2);
+}
+
+void sendRealtimeMessage(unsigned char m){
+   FILE *f = fopen(device, "w");
+   if (f == NULL) {
+      printError("Error: cannot open ", device);
+      exit(1);
+   }
+   fputc(m,f);
+   fclose(f);
+}
+
+void sendChannelMessage(unsigned char m1, unsigned  char m2, unsigned char m3){
+   FILE *f = fopen(device, "w");
+   if (f == NULL) {
+      printError("Error: cannot open ", device);
+      exit(1);
+   }
+   fputc(m1,f);
+   fputc(m2,f);
+   if ((m1 & 0xf0) != 0xc0) { 
+     fputc(m3,f);
+   }
+   fclose(f);
+}
+
+void readRealtimeMessage() {
+   unsigned char c;
+
+   FILE *f = fopen(device, "r");
+   c=fgetc(f);
+   if( ((c & 0xf0) == 0x80)|| ((c & 0xf0) == 0x90)) {
+     printf("%2x",c);
+     c=fgetc(f);
+     printf("%2x",c);
+     c=fgetc(f);
+     printf("%2x\n",c);
+   }else if( ((c & 0xf0) == 0xb0)|| ((c & 0xf0) == 0xc0)) {
+     printf("%2x",c);
+     c=fgetc(f);
+     printf("%2x",c);
+     c=fgetc(f);
+     printf("%2x",c);
+
+     c=fgetc(f);
+     printf(" %2x",c);
+     c=fgetc(f);
+     printf("%2x",c);
+     c=fgetc(f);
+     printf("%2x",c);
+
+     c=fgetc(f);
+     printf(" %2x",c);
+     c=fgetc(f);
+     printf("%2x\n",c);
+   } else {
+     printf("%2x\n",c);
+   }
+   fflush(stdout);
+   fclose(f);
+
+}
+
 void sendCommand(unsigned char *command, long int cl, unsigned char *buffer, long int bl) {
    FILE *f = fopen(device, "w");
    if (f == NULL) {
@@ -133,10 +199,6 @@ char *offOn2String(unsigned char v){
   } else {
     return "On";
   }
-}
-
-void printError(char *e1,char *e2) {
-  printf("%s %s\n",e1,e2);
 }
 
 int readInteger(char *line, char **remain){
@@ -662,6 +724,37 @@ int readGateTime(char *line) {
   return 0;
 }
 
+int readMute(char *line) {
+  int partRange;
+  int mu;
+  char *remain;
+  char *token;
+
+  token=strtok_r(line," ",&remain);
+  partRange=readPart(token,&remain);
+  if(partRange==-1) {////
+          return -1;
+  }
+  jumpBlanks(&remain);
+  token=strtok_r(remain," ",&remain);
+  if(strcmp(token,"on")==0) {
+    mu=1;
+  } else if(strcmp(token,"off")==0) {
+    mu=0;
+  } else {
+    printError("Error in mute",remain);
+    return -1;
+  }
+  for(int part=0;part<16;part++) {
+    if(partRange & 1) {
+       dd.part[part].mute=mu;
+    }
+    partRange=partRange>>1;
+  }
+  return 0;
+}
+
+
 int readVelocity(char *line) {
   int partRange;
   int v;
@@ -773,6 +866,57 @@ int readLength(char *line) {
   return 0;
 }
 
+int readVoice(char *line) {
+  char *token;
+  int voice;
+
+  token=strtok_r(line," ",&line);
+  if(isdigit(token[0])) {
+    voice=readInteger(token,&token);
+    if(voice >=0 && voice <=3) {
+      return voice;
+    } else {
+      return -1;
+    }
+  } else if (strcmp(token,"Mono1")==0){
+    return 0;
+  } else if (strcmp(token,"Mono2")==0){
+    return 1;
+  } else if (strcmp(token,"Poly1")==0){
+    return 2;
+  } else if (strcmp(token,"Poly2")==0){
+    return 3;
+  } else {
+    return -1;
+  }
+}
+
+int readVoiceAssign(char *line) {
+  int partRange;
+  int va;
+  char *remain;
+  char *token;
+
+  token=strtok_r(line," ",&remain);
+  partRange=readPart(line,&remain);
+  if(partRange==-1) {
+    return -1;
+  }
+  va=readVoice(remain);
+  if(va==-1) {
+    printError("Error in Voice Assign",remain);
+    return -1;
+  }
+  for(int part=0;part<16;part++) {
+    if(partRange & 1) {
+      //printf("putting part %d last step\n",lst);
+      dd.part[part].voiceAssign=va;
+    }
+    partRange=partRange>>1;
+  }
+  return 0;
+}
+
 int readLastStep(char *line) {
   int partRange;
   int lst;
@@ -871,6 +1015,73 @@ int readPattern(char *line) {
   return 0;
 }
 
+int start(char *line) {
+  sendRealtimeMessage(0xfa);
+  sendRealtimeMessage(0xf8);
+  return 0;
+}
+
+int stop(char *line) {
+  printf("send stop\n");
+  sendRealtimeMessage(0xf8);
+  sendRealtimeMessage(0xfc);
+  sendRealtimeMessage(0xfc);
+  return 0;
+}
+
+int next(char *line) {
+  unsigned char mm,bb,pp;
+  char *num;
+
+  num=line;
+  int pattern=readInteger(line,&line);
+  if(pattern<1 || pattern>250) {
+    printError("Wrong pattern number:",num);
+    return -1;
+  }
+  pattern--;
+  mm=0;
+  bb=pattern<128?0:1;
+  pp=(pattern%128);
+
+  sendChannelMessage(0xb0 | channel,0,mm);
+  sendChannelMessage(0xb0 | channel,0x20,bb);
+  sendChannelMessage(0xc0 | channel,pp,0);
+  return 0;
+}
+
+int waitClock(char *line) {
+  char *num=line;
+  int n=readInteger(line,&line);
+  //n=(n-1)/3+1;
+  n=n*3+1; // +1 +2 +3
+
+  if(n<0) {
+    printError("Wrong time:",num);
+    return -1;
+  }
+  unsigned char c;
+
+  FILE *f = fopen(device, "r");
+  while(n) {
+    c=fgetc(f);
+    if(c==0xf8) {
+      n--;
+    }
+  }
+  fclose(f);
+}
+
+int read(char *line) {
+    currentPatternDataDump();
+    return 0;
+}
+
+int write(char *line) {
+    currentPatternDataSend();
+    return 0;
+}
+
 int readLine(char *line) {
   char *command;
   char *remain;
@@ -885,6 +1096,10 @@ int readLine(char *line) {
      return readName(remain);
   } else if(0==strncmp(command,"gateTime",2)) {
      return readGateTime(remain);
+  } else if(0==strncmp(command,"mute",2)) {
+     return readMute(remain);
+  } else if(0==strncmp(command,"voiceAssign",2)) {
+     return readVoiceAssign(remain);
   } else if(0==strncmp(command,"velocity",2)) {
      return readVelocity(remain);
   } else if(0==strncmp(command,"lastStep",2)) {
@@ -895,22 +1110,24 @@ int readLine(char *line) {
      return readTranspose(remain);
   } else if(0==strncmp(command,"print",2)) {
      return printPattern(remain);
+  } else if(0==strncmp(command,"start",3)) {
+     return start(remain);
+  } else if(0==strncmp(command,"stop",3)) {
+     return stop(remain);
+  } else if(0==strncmp(command,"next",2)) {
+     return next(remain);
+  } else if(0==strncmp(command,"wait",2)) {
+     return waitClock(remain);
+  } else if(0==strncmp(command,"read",2)) {
+     return read(remain);
+  } else if(0==strncmp(command,"write",2)) {
+     return write(remain);
   } else if(command[0]=='#') { //comment
      return 0;
   } else {
      printError("command not defined.",command);
      return -1;
   }
-}
-
-void sendRealtimeMesagge(unsigned char m){
-   FILE *f = fopen(device, "w");
-   if (f == NULL) {
-      printError("Error: cannot open ", device);
-      exit(1);
-   }
-   fputc(m,f);
-   fclose(f);
 }
 
 int readArguments(int argc, char *argv[]) {
@@ -947,13 +1164,21 @@ char lineBuffer[MAX_LINE];
 int i=0;
 int res;
 
+
+  //start(0);
+  //next("10");
+  //sendRealtimeMessage(0xFA);
+  //sendRealtimeMessage(0xF8);
+  //return 0;
+
+
   res=readArguments(argc,argv);
   if(res<0) {
     exit(1);
   }
-  if(device!=0) {
-    sendRealtimeMesagge(0xfc); //stop
-    currentPatternDataDump();
+  if(device==0) {
+    printError("no midi device found","");
+    exit(1);
   }
   
   char c=getchar();
@@ -974,9 +1199,5 @@ int res;
     c=getchar();
   }
   
-  if(device!=0) {
-    currentPatternDataSend();
-    sendRealtimeMesagge(0xfa); //start 
-  }
   return 0;
 }

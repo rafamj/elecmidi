@@ -11,8 +11,11 @@ channel: the midi channel.
 usage:
 
 echo "command" | ./electmidi
+
 or
-cat script | ./electmidi
+
+cat script | ./elecmidi
+
 
 example.txt is an example script
 
