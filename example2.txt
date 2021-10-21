@@ -1,0 +1,36 @@
+goto 1
+read
+length 2
+lastStep 1  16 
+
+gateTime 1 70
+velocity 1 90
+pattern 1   ****         ****        *_xx   **xx      **xx  X  x*x* x**_
+notes 1     a1 = c^ av   c^ g = bv   a =    g =       a =      f f+ g g+ 
+
+pattern 9  X X X X  X X X x*x*x**x
+notes 9                   c4 = = = 
+
+pattern 10 X x*x X *xxx  X   X x*x X *xxx  X
+notes 10     c4 =  c4          c4 =  c4
+
+mute 2-16 on
+mute 1 off
+copySound 78.9 to 9
+copySound 20.10 to 10
+copySound 40.1 to 1
+write
+
+start
+wait 1
+mute 9 off
+write
+wait 1 
+pattern 9  *xxx  xx**  xx**  xx**   X X X  x*x*x**x
+notes 9    c4      ==    ==  ==            = = = =
+mute 10 off
+write
+
+wait 2 
+
+stop

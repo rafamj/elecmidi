@@ -5,6 +5,7 @@
 #include "elecmidi.h"
 
 struct DataDumpType dd;
+struct DataDumpType auxData;
 
 char* device =  "/dev/dmmidi1" ;
 int channel=0;
@@ -219,6 +220,25 @@ int readInteger(char *line, char **remain){
   return n;
 }
 
+void readNumber(char *line, char **remain, int *intPart, int *decPart){
+  char *token;
+  char *ip, *dp;
+  int n;
+  token=strtok_r(line," ",remain);
+  if(!token) {
+    printError("Error reading number. Blank space or end of line found",lineBufferCopy);
+    exit(1);
+  } 
+  if(!isdigit(token[0])) {
+    printError("Error reading number. found ",token);
+    printError("Error reading number.",lineBufferCopy);
+    exit(1);
+  }
+  ip=strtok_r(token,".",&dp);
+  *intPart=atoi(ip);
+  *decPart=atoi(dp);
+}
+
 long int readRange(char *line){
   char *token;
   char *number1;
@@ -411,7 +431,7 @@ long int encodeData(struct DataDumpType *dd, unsigned char *buffer){
   }
   return no+1;
 }
-/*
+
 void patternDataDump(int pattern) {
     unsigned char data[10] = {0xf0, 0x42, 0x30 | channel, 0, 1, 0x23, 0x1c,
                              pattern & 0x7f, pattern>>7, 0xf7};
@@ -424,10 +444,10 @@ void patternDataDump(int pattern) {
 
    
    sendCommand(data,sizeof(data),(char *)&input, sizeof(input));
-   decodeData(input.buffer,&dd);
-   processPattern(&dd);
+   decodeData(input.buffer,&auxData);
+   //processPattern(&dd);
 }
-*/
+
 
 void currentPatternDataDump() {
     unsigned char data[8] = {0xf0, 0x42, 0x30 | channel, 0, 1, 0x23, 0x10,0xf7};
@@ -1016,7 +1036,7 @@ int readPattern(char *line) {
 }
 
 int start(char *line) {
-  sendRealtimeMessage(0xfa);
+  sendRealtimeMessage(0xfb);
   sendRealtimeMessage(0xf8);
   return 0;
 }
@@ -1029,7 +1049,20 @@ int stop(char *line) {
   return 0;
 }
 
-int next(char *line) {
+void waitClock(int n) {
+  unsigned char c;
+
+  FILE *f = fopen(device, "r");
+  while(n) {
+    c=fgetc(f);
+    if(c==0xf8) {
+      n--;
+    }
+  }
+  fclose(f);
+}
+
+int readGoto(char *line) {
   unsigned char mm,bb,pp;
   char *num;
 
@@ -1047,29 +1080,28 @@ int next(char *line) {
   sendChannelMessage(0xb0 | channel,0,mm);
   sendChannelMessage(0xb0 | channel,0x20,bb);
   sendChannelMessage(0xc0 | channel,pp,0);
+  waitClock(1);
   return 0;
 }
 
-int waitClock(char *line) {
+int readWait(char *line) {
   char *num=line;
-  int n=readInteger(line,&line);
-  //n=(n-1)/3+1;
+  int intPart, decPart;
+  int n;
+
+  readNumber(line,&line,&intPart,&decPart);
+  int lp=dd.part[0].lastStep;
+  if(lp==0) lp=16;
+  n=intPart*lp*dd.length+decPart;
+
   n=n*3+1; // +1 +2 +3
 
   if(n<0) {
     printError("Wrong time:",num);
     return -1;
   }
-  unsigned char c;
-
-  FILE *f = fopen(device, "r");
-  while(n) {
-    c=fgetc(f);
-    if(c==0xf8) {
-      n--;
-    }
-  }
-  fclose(f);
+  waitClock(n);
+  return 0;
 }
 
 int read(char *line) {
@@ -1080,6 +1112,39 @@ int read(char *line) {
 int write(char *line) {
     currentPatternDataSend();
     return 0;
+}
+
+int readCopy(char *line) {
+  int pattern, part,p;
+  char *token;
+
+  readNumber(line,&line,&pattern,&part);
+  if(pattern<1 || pattern>250) {
+    printError("Wrong pattern number:","");
+    return -1;
+  }
+  if(part<1 || part>16) {
+    printError("Error in part source","");
+    return -1;
+  }
+  token=strtok_r(line," ",&line);
+  if(strcmp(token,"to")!=0) {
+    printError("'to' expected. Found ",token);
+    return -1;
+  }
+  p=readInteger(line,&line);
+  if(p<1 || p>16) {
+    printError("Error in part destination","");
+    return -1;
+  }
+
+  patternDataDump(pattern);
+  unsigned char *orig=(unsigned char *)&auxData.part[part-1];
+  unsigned char *dest=(unsigned char *)&dd.part[p-1];
+  for(int i=2;i<38;i++) {
+    dest[i]=orig[i];
+  }
+  return 0;
 }
 
 int readLine(char *line) {
@@ -1114,14 +1179,16 @@ int readLine(char *line) {
      return start(remain);
   } else if(0==strncmp(command,"stop",3)) {
      return stop(remain);
-  } else if(0==strncmp(command,"next",2)) {
-     return next(remain);
+  } else if(0==strncmp(command,"goto",2)) {
+     return readGoto(remain);
   } else if(0==strncmp(command,"wait",2)) {
-     return waitClock(remain);
+     return readWait(remain);
   } else if(0==strncmp(command,"read",2)) {
      return read(remain);
   } else if(0==strncmp(command,"write",2)) {
      return write(remain);
+  } else if(0==strncmp(command,"copySound",2)) {
+     return readCopy(remain);
   } else if(command[0]=='#') { //comment
      return 0;
   } else {
