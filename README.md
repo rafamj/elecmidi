@@ -13,7 +13,7 @@ channel: the midi channel.
 
 usage:
 
-echo "command" | ./electmidi
+echo "command" | ./elecmidi
 
 or
 
