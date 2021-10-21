@@ -20,7 +20,7 @@ or
 cat script | ./elecmidi
 
 
-example.txt is an example script
+example1.txt, example2.txt are script examples.
 
 Command line arguments:
 
