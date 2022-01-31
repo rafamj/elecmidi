@@ -1210,6 +1210,7 @@ int main(int argc, char *argv[]) {
 char lineBuffer[MAX_LINE];
 int i=0;
 int res;
+int immediate=0;
 
 
   //start(0);
@@ -1234,12 +1235,24 @@ int res;
       lineBuffer[i++]=c;
     }
     if(c=='\n' || c==EOF) {
-      lineBuffer[i-1]=0;
+      i--;
+      while(lineBuffer[i]=='\n' || lineBuffer[i]==' ' || lineBuffer[i]=='\t')
+        lineBuffer[i--]=0;
+      if(lineBuffer[i]=='!') {
+        immediate=1;
+	lineBuffer[i]=0;
+      }
       strcpy(lineBufferCopy,lineBuffer);
+      if(immediate) {
+        read(0);
+      }
       res=readLine(lineBuffer);
       if(res!=0){
         printError(":: ",lineBufferCopy);
         exit(1);
+      }
+      if(immediate) {
+        write(0);
       }
       i=0;
     }
