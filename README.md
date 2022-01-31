@@ -23,10 +23,15 @@ cat script | ./elecmidi
 example1.txt, example2.txt are script examples.
 
 if a command ends in ! then it is an immediate command. For example:
+
 echo "name Pattern1 !" | ./elecmidi
+
 is equivalent to the following 3 lines.
+
 read
+
 name Pattern1
+
 write
 
 Command line arguments:
