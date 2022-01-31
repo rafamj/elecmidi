@@ -1241,6 +1241,8 @@ int immediate=0;
       if(lineBuffer[i]=='!') {
         immediate=1;
 	lineBuffer[i]=0;
+      } else {
+        immediate=0;
       }
       strcpy(lineBufferCopy,lineBuffer);
       if(immediate) {
