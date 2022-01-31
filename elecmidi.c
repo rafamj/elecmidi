@@ -10,6 +10,7 @@ struct DataDumpType auxData;
 char* device =  "/dev/dmmidi1" ;
 int channel=0;
 int octave=4;
+FILE *midiFile;
 
 #define TRACK_SIZE 18725 //max size of bytes received
 #define MAX_LINE 500
@@ -22,107 +23,63 @@ void printError(char *e1,char *e2) {
   printf("%s %s\n",e1,e2);
 }
 
-void sendRealtimeMessage(unsigned char m){
-   FILE *f = fopen(device, "w");
-   if (f == NULL) {
+void openMidi(char *mode) {
+   midiFile = fopen(device, mode);
+   if (midiFile == NULL) {
       printError("Error: cannot open ", device);
       exit(1);
    }
-   fputc(m,f);
-   fclose(f);
+}
+
+void sendMidiChar(unsigned char m){
+   fputc(m,midiFile);
+}
+
+unsigned char readMidiChar() {
+  return fgetc(midiFile);
+}
+
+void readMidiBuffer(unsigned char *buffer, long int bl) {
+  fread(buffer, bl,1,midiFile);  
+}
+
+void closeMidi(){
+   fclose(midiFile);
+}
+
+void sendRealtimeMessage(unsigned char m){
+   openMidi("w");
+   sendMidiChar(m);
+   closeMidi();
 }
 
 void sendChannelMessage(unsigned char m1, unsigned  char m2, unsigned char m3){
-   FILE *f = fopen(device, "w");
-   if (f == NULL) {
-      printError("Error: cannot open ", device);
-      exit(1);
-   }
-   fputc(m1,f);
-   fputc(m2,f);
+   openMidi("w");
+   sendMidiChar(m1);
+   sendMidiChar(m2);
    if ((m1 & 0xf0) != 0xc0) { 
-     fputc(m3,f);
+     sendMidiChar(m3);
    }
-   fclose(f);
-}
-
-void readRealtimeMessage() {
-   unsigned char c;
-
-   FILE *f = fopen(device, "r");
-   c=fgetc(f);
-   if( ((c & 0xf0) == 0x80)|| ((c & 0xf0) == 0x90)) {
-     printf("%2x",c);
-     c=fgetc(f);
-     printf("%2x",c);
-     c=fgetc(f);
-     printf("%2x\n",c);
-   }else if( ((c & 0xf0) == 0xb0)|| ((c & 0xf0) == 0xc0)) {
-     printf("%2x",c);
-     c=fgetc(f);
-     printf("%2x",c);
-     c=fgetc(f);
-     printf("%2x",c);
-
-     c=fgetc(f);
-     printf(" %2x",c);
-     c=fgetc(f);
-     printf("%2x",c);
-     c=fgetc(f);
-     printf("%2x",c);
-
-     c=fgetc(f);
-     printf(" %2x",c);
-     c=fgetc(f);
-     printf("%2x\n",c);
-   } else {
-     printf("%2x\n",c);
-   }
-   fflush(stdout);
-   fclose(f);
-
+   closeMidi();
 }
 
 void sendCommand(unsigned char *command, long int cl, unsigned char *buffer, long int bl) {
-   FILE *f = fopen(device, "w");
-   if (f == NULL) {
-      printf("Error: cannot open %s\n", device);
-      exit(1);
-   }
+   openMidi("w");
    for(int i=0;i<cl;i++) {
-     fputc(command[i],f);
+     sendMidiChar(command[i]);
    }
-   f = freopen(device, "r",f);
+   closeMidi();
+   openMidi("r");
    int tries=0;
-   buffer[0]=fgetc(f);
+   buffer[0]=readMidiChar();
    while(buffer[0]!=0xf0 && tries++ < 10) { //wait for the sys ex message
-     buffer[0]=fgetc(f);
+     buffer[0]=readMidiChar();
    }
    if(buffer[0]==0xf0){
-     fread(buffer+1, bl-1,1,f);
+     readMidiBuffer(buffer+1, bl-1);
    } 
-   fclose(f);
-/*
-   if(command[0]!=0xf0 || command[cl-1]!=0xf7) {
-     printf("command mal formado %x %x\n",command[0],command[cl-1]);
-   }
-   if(buffer[0]!=0xf0 || buffer[bl-1]!=0xf7) {
-     printf("respuesta mal formada %x %x\n",buffer[0],buffer[bl-1]);
-   }
-   printf("enviado comando %x respuesta %x\n",command[6],buffer[6]);
-   */
+   closeMidi();
 }
-
-/*
-void deviceInquiry(){
-   unsigned char data[6] = {0xf0, 0x7e, channel, 0x06, 0x01, 0xf7};
-   unsigned char input[15];
-
-   sendCommand(data,sizeof(data),input, sizeof(input));
-   for(int i=0;i<15;i++) printf("%x ",input[i]);
-   printf("\n");
-}
-*/
 
 
 char *beat2String(int n) {
@@ -1042,7 +999,6 @@ int start(char *line) {
 }
 
 int stop(char *line) {
-  printf("send stop\n");
   sendRealtimeMessage(0xf8);
   sendRealtimeMessage(0xfc);
   sendRealtimeMessage(0xfc);
@@ -1052,14 +1008,14 @@ int stop(char *line) {
 void waitClock(int n) {
   unsigned char c;
 
-  FILE *f = fopen(device, "r");
+  openMidi("r");
   while(n) {
-    c=fgetc(f);
+    c=readMidiChar();
     if(c==0xf8) {
       n--;
     }
   }
-  fclose(f);
+  closeMidi();
 }
 
 int readGoto(char *line) {
@@ -1147,6 +1103,28 @@ int readCopy(char *line) {
   return 0;
 }
 
+int oscType(char *line) {
+  int partRange;
+  int osct;
+  char *remain;
+  char *token;
+
+  token=strtok_r(line," ",&remain);
+  partRange=readPart(line,&remain);
+  if(partRange==-1) {
+    return -1;
+  }
+  osct=readInteger(remain,&remain);
+  for(int part=0;part<16;part++) {
+    if(partRange & 1) {
+      dd.part[part].oscTypel=osct%256;
+      dd.part[part].oscTypeh=osct/256;
+    }
+    partRange=partRange>>1;
+  }
+  return 0;
+}
+
 int readLine(char *line) {
   char *command;
   char *remain;
@@ -1189,6 +1167,8 @@ int readLine(char *line) {
      return write(remain);
   } else if(0==strncmp(command,"copySound",2)) {
      return readCopy(remain);
+  } else if(0==strncmp(command,"oscType",2)) {
+     return oscType(remain);
   } else if(command[0]=='#') { //comment
      return 0;
   } else {

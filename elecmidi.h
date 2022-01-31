@@ -11,7 +11,10 @@ struct partType {
   unsigned char lastStep;
   unsigned char mute;
   unsigned char voiceAssign;
-  unsigned char fill1[45];
+  unsigned char fill0[5];
+  unsigned char oscTypel;
+  unsigned char oscTypeh;
+  unsigned char fill1[38];
   struct stepType step[64];
 };
 
