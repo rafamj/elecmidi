@@ -66,6 +66,18 @@ notes 4 @33   d2f^  =*15     e2g^ =*15
 #prints the data to stdout
 #print 1-4
 
+#poke command writes a value in an address
+#the type parameter can be the type of the value (u=byte, d=2 byte integer, c=character)
+poke <addr> [part] [type[number of values]] <value>
+#change scale
+poke 40 0 # equivalent to poke 20 u1 0 # equivalent to poke 20 u1 0
+#change osc type in part 3 to 21=PureEight
+poke p3 8 d 20  
+
+#peek [part] <address> [type[number of values]]
+#print the 10 first values in part 3 
+peek p3 0 u10
+
 #writes back the modified pattern into the electribe
 write
 
@@ -92,6 +104,7 @@ write
 #waits 1 cycle (length * last step of part 0)
 wait 1 
 mute 3 off
+transpose 1-4 6
 write
 
 waits 1 cycle + 15 steps

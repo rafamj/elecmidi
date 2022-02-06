@@ -325,7 +325,7 @@ int printPattern(char *line) {
      }
      partRange = partRange>>1;
    }
-   return 0;
+   return 1;
 }
 
 int checkData(struct DataDumpType *dd){
@@ -1125,6 +1125,108 @@ int oscType(char *line) {
   return 0;
 }
 
+void printValue(char *format0,char *format,int addr,int part,int offset) {
+  addr += offset;
+  if(part!=0) {
+    printf(format,part,addr,*((unsigned char*)&dd.part+sizeof(struct partType)*(part-1)+addr));
+  } else {
+    printf(format0,addr,*((unsigned char*)&dd+addr));
+  }
+}
+
+int readPeek(char *line) {
+  char *remain=line;
+  int part=0;
+  int addr;
+  char type='u';
+  int n=1;
+
+  jumpBlanks(&remain);
+  if(remain[0]=='p') {
+    remain++;
+    part=readInteger(remain,&remain);
+    if(part<1 || part>16) {
+      printError("Error in part source","");
+      return -1;
+    }
+  }
+  addr=readInteger(remain,&remain);
+  jumpBlanks(&remain);
+  if(remain[0]) {
+    type=remain[0];
+    remain++;
+    jumpBlanks(&remain);
+    if(remain[0]) {
+      n=readInteger(remain,&remain);
+    }
+  }
+  for(int i=0;i<n;i++) {
+    if (type=='d') {
+      if(part!=0) {
+        printf("part %d %d %d\n",part,addr,*(short *)((unsigned char*)&dd.part+sizeof(struct partType)*(part-1)+addr+i*2));
+      } else {
+        printf("%d %d\n",addr,*(short *)((unsigned char*)&dd+addr+i*2));
+      }
+    } else if(type=='c') {
+        printValue("%d %c\n","part %d %d %c\n",addr,part,i);
+    } else {
+        printValue("%d %u\n","part %d %d %u\n",addr,part,i);
+    }
+  }
+  return 1;
+}
+
+int readPoke(char *line) {
+  char *remain=line;
+  int addr;
+  int part=0;
+  int value;
+  char type='u';
+  int n=1;
+
+
+  jumpBlanks(&remain);
+  if(remain[0]=='p') {
+    remain++;
+    part=readInteger(remain,&remain);
+    if(part<1 || part>16) {
+      printError("Error in part source","");
+      return -1;
+    }
+  }
+  addr=readInteger(remain,&remain);
+  jumpBlanks(&remain);
+  if(!isdigit(remain[0])) {
+    type=remain[0];
+    remain++;
+    if(isdigit(remain[0])) {
+      n=readInteger(remain,&remain);
+    }
+  }
+  for(int i=0;i<n;i++) {
+    jumpBlanks(&remain);
+    if(type=='c') {
+      value=strtok_r(remain," ",&remain)[0];
+    } else {
+      value=readInteger(remain,&remain);
+    }
+    if (type=='d') {
+      if(part!=0) {
+        *(short *)((unsigned char *)&dd.part+sizeof(struct partType)*(part-1)+addr+2*i)=value;
+      } else {
+        *(short *)((unsigned char *)&dd+addr+2*i)=value;
+      }
+    } else {
+      if(part!=0) {
+        *((unsigned char *)&dd.part+sizeof(struct partType)*(part-1)+addr+i)=value;
+      } else {
+        *((unsigned char *)&dd+addr+i)=value;
+      }
+    }
+  }
+  return 0;
+}
+
 int readLine(char *line) {
   char *command;
   char *remain;
@@ -1169,6 +1271,10 @@ int readLine(char *line) {
      return readCopy(remain);
   } else if(0==strncmp(command,"oscType",2)) {
      return oscType(remain);
+  } else if(0==strncmp(command,"peek",2)) {
+     return readPeek(remain);
+  } else if(0==strncmp(command,"poke",2)) {
+     return readPoke(remain);
   } else if(command[0]=='#') { //comment
      return 0;
   } else {
@@ -1249,11 +1355,11 @@ int immediate=0;
         read(0);
       }
       res=readLine(lineBuffer);
-      if(res!=0){
+      if(res<0){
         printError(":: ",lineBufferCopy);
         exit(1);
       }
-      if(immediate) {
+      if(!res && immediate) {
         write(0);
       }
       i=0;
