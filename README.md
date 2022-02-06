@@ -36,6 +36,6 @@ write
 
 Command line arguments:
 
--d device  (with -d 0 the program doesn't connect to any device)
+-d device  
 
 -c channel  (1-16)
