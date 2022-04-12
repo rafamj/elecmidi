@@ -68,7 +68,7 @@ notes 4 @33   d2f^  =*15     e2g^ =*15
 
 #poke command writes a value in an address
 #the type parameter can be the type of the value (u=byte, d=2 byte integer, c=character)
-poke <addr> [part] [type[number of values]] <value>
+#poke <addr> [part] [type[number of values]] <value>
 #change scale
 poke 40 0 # equivalent to poke 20 u1 0 # equivalent to poke 20 u1 0
 #change osc type in part 3 to 21=PureEight
