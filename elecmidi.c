@@ -1279,11 +1279,7 @@ int readMotionSequence(char *line) {
     }
     jumpBlanks(&remain);
   }
-  //for(int n=0;n<64;n++) {
-  //  dd.motionSequence.motion[slot][n]=60;
-  //}
   
-  printf("end\n");
   return 0;
 }
 
