@@ -18,6 +18,12 @@ struct partType {
   struct stepType step[64];
 };
 
+struct motionSequenceType {
+  unsigned char part[24];
+  unsigned char destination[24];
+  unsigned char motion[24][64];
+};
+
 struct DataDumpType{
  unsigned char header[4];
  unsigned char size[4];
@@ -40,7 +46,8 @@ struct DataDumpType{
  unsigned char alternate1516;
  unsigned char fill4[8];
  unsigned char fill5[178];
- unsigned char motionSequence[1584];
+ //unsigned char motionSequence[1584];
+ struct motionSequenceType motionSequence;
  unsigned char fill6[208];
  struct partType part[16];
  unsigned char fill7[252];

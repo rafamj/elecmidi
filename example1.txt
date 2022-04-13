@@ -78,6 +78,11 @@ poke p3 8 d 20
 #print the 10 first values in part 3 
 peek p3 0 u10
 
+#motion sequence. parameters slot (0-23) part(1-16) destination(0-19) sequence (64 values from 0 to 127))
+#the values can have the form <position>:<value>
+#for example the following line changes the pan continously from 0 at position 0 to 127 at position 30, in positions 31 and 32 puts the value 127 and from positions 33 to 64 goes back to 0
+motion 0 1 11       0:0 30:127 127 127 63:0
+
 #writes back the modified pattern into the electribe
 write
 

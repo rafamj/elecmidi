@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <math.h>
 #include "elecmidi.h"
 
 struct DataDumpType dd;
@@ -177,7 +178,7 @@ int readInteger(char *line, char **remain){
   return n;
 }
 
-void readNumber(char *line, char **remain, int *intPart, int *decPart){
+void readNumber(char *line, char *separator, char **remain, int *intPart, int *decPart){
   char *token;
   char *ip, *dp;
   int n;
@@ -191,9 +192,13 @@ void readNumber(char *line, char **remain, int *intPart, int *decPart){
     printError("Error reading number.",lineBufferCopy);
     exit(1);
   }
-  ip=strtok_r(token,".",&dp);
+  ip=strtok_r(token,separator,&dp);
   *intPart=atoi(ip);
-  *decPart=atoi(dp);
+  if(separator[0]==':' && strlen(dp)==0) { //special case for motion sequence
+    *decPart=-1;
+  } else {
+    *decPart=atoi(dp);
+  }
 }
 
 long int readRange(char *line){
@@ -225,10 +230,11 @@ long int readRange(char *line){
 }
 
 int readPart(char *line, char **remain){
-
+  char *token;
   long int range;
 
-  range=readRange(line);
+  token=strtok_r(line," ",remain);
+  range=readRange(token);
   return range & 0xffff;
 }
 
@@ -290,12 +296,21 @@ int printPart(int part) {
      printf("\n\n");
 }
 
+void printSlot(int slot) {
+  if (dd.motionSequence.part[slot]==0) return; //Off
+  printf("motion %d %d %d",slot,dd.motionSequence.part[slot],dd.motionSequence.destination[slot]);
+  for(int i=0;i<64;i++) {
+    printf(" %3d",dd.motionSequence.motion[slot][i]);
+  }
+  printf("\n");
+}
+
 int printPattern(char *line) {
    int partRange;
    char *token;
    char *remain;
 
-    token=strtok_r(line," ",&remain);
+    token=strtok_r(line," ",&remain); ///?????
     if(token==0) {
       partRange=0xffff;
     } else {
@@ -324,6 +339,9 @@ int printPattern(char *line) {
        printPart(part);
      }
      partRange = partRange>>1;
+   }
+   for(int slot=0;slot<24;slot++) {
+     printSlot(slot);
    }
    return 1;
 }
@@ -588,7 +606,7 @@ int readNotes(char *line) {
   int step[16];
   int repeat=1;
   
-  token=strtok_r(line," ",&remain);
+  //token=strtok_r(line," ",&remain);
   partRange=readPart(line,&remain);
   if(partRange==-1) {
     return -1;
@@ -661,8 +679,8 @@ int readGateTime(char *line) {
   char *remain;
   char *token;
 
-  token=strtok_r(line," ",&remain);
-  partRange=readPart(token,&remain);
+  //token=strtok_r(line," ",&remain);
+  partRange=readPart(line,&remain);
   if(partRange==-1) {////
     return -1;
   }
@@ -707,8 +725,8 @@ int readMute(char *line) {
   char *remain;
   char *token;
 
-  token=strtok_r(line," ",&remain);
-  partRange=readPart(token,&remain);
+  //token=strtok_r(line," ",&remain);
+  partRange=readPart(line,&remain);
   if(partRange==-1) {////
           return -1;
   }
@@ -739,8 +757,8 @@ int readVelocity(char *line) {
   char *remain;
   char *token;
 
-  token=strtok_r(line," ",&remain);
-  partRange=readPart(token,&remain);
+  //token=strtok_r(line," ",&remain);
+  partRange=readPart(line,&remain);
   if(partRange==-1) {////
     return -1;
   }
@@ -786,8 +804,8 @@ int readTranspose(char *line) {
   char *remain;
   char *token;
 
-  token=strtok_r(line," ",&remain);
-  partRange=readPart(token,&remain);
+  //token=strtok_r(line," ",&remain);
+  partRange=readPart(line,&remain);
   if(partRange==-1) {
     return -1;
   }
@@ -874,7 +892,7 @@ int readVoiceAssign(char *line) {
   char *remain;
   char *token;
 
-  token=strtok_r(line," ",&remain);
+  //token=strtok_r(line," ",&remain);
   partRange=readPart(line,&remain);
   if(partRange==-1) {
     return -1;
@@ -900,7 +918,7 @@ int readLastStep(char *line) {
   char *remain;
   char *token;
 
-  token=strtok_r(line," ",&remain);
+  //token=strtok_r(line," ",&remain);
   partRange=readPart(line,&remain);
   if(partRange==-1) {
     return -1;
@@ -966,8 +984,8 @@ int readPattern(char *line) {
   int step0=1;
   int step;
 
-  token=strtok_r(line," ",&remain);
-  partRange=readPart(token,&remain);
+  //token=strtok_r(line," ",&remain);
+  partRange=readPart(line,&remain);
   if(partRange==-1) {
     return -1;
   }
@@ -1045,7 +1063,7 @@ int readWait(char *line) {
   int intPart, decPart;
   int n;
 
-  readNumber(line,&line,&intPart,&decPart);
+  readNumber(line,".",&line,&intPart,&decPart);
   int lp=dd.part[0].lastStep;
   if(lp==0) lp=16;
   n=intPart*lp*dd.length+decPart;
@@ -1074,7 +1092,7 @@ int readCopy(char *line) {
   int pattern, part,p;
   char *token;
 
-  readNumber(line,&line,&pattern,&part);
+  readNumber(line,".",&line,&pattern,&part);
   if(pattern<1 || pattern>250) {
     printError("Wrong pattern number:","");
     return -1;
@@ -1109,7 +1127,7 @@ int oscType(char *line) {
   char *remain;
   char *token;
 
-  token=strtok_r(line," ",&remain);
+  //token=strtok_r(line," ",&remain);
   partRange=readPart(line,&remain);
   if(partRange==-1) {
     return -1;
@@ -1227,6 +1245,48 @@ int readPoke(char *line) {
   return 0;
 }
 
+int readMotionSequence(char *line) {
+  char *remain;
+  int slot;
+  int part;
+  int destination;
+  int i=0;
+  int lpart,rpart;
+
+  slot=readInteger(line,&remain);
+  part=readInteger(remain,&remain);
+  destination=readInteger(remain,&remain);
+  dd.motionSequence.part[slot]=part;
+  dd.motionSequence.destination[slot]=destination;
+  jumpBlanks(&remain);
+  while(isdigit(remain[0])) {
+    unsigned char s;
+    readNumber(remain,":",&remain,&lpart,&rpart);
+    if(rpart==-1) { 
+      s=lpart;
+      dd.motionSequence.motion[slot][i++]=s;
+    } else if(lpart==0) {
+      s=rpart;
+      dd.motionSequence.motion[slot][i++]=s;
+    } else {
+      int v0=dd.motionSequence.motion[slot][i-1];
+      int n=lpart-i+1,n0=i-1;
+      for(;i<=lpart;i++) {
+        double sd=v0+(rpart-(double)v0)*(i-n0)/n;
+        s=sd+0.5;
+        dd.motionSequence.motion[slot][i]=s;
+      }
+    }
+    jumpBlanks(&remain);
+  }
+  //for(int n=0;n<64;n++) {
+  //  dd.motionSequence.motion[slot][n]=60;
+  //}
+  
+  printf("end\n");
+  return 0;
+}
+
 int readLine(char *line) {
   char *command;
   char *remain;
@@ -1275,6 +1335,8 @@ int readLine(char *line) {
      return readPeek(remain);
   } else if(0==strncmp(command,"poke",2)) {
      return readPoke(remain);
+  } else if(0==strncmp(command,"motion",2)) {
+     return readMotionSequence(remain);
   } else if(command[0]=='#') { //comment
      return 0;
   } else {
@@ -1324,7 +1386,6 @@ int immediate=0;
   //sendRealtimeMessage(0xFA);
   //sendRealtimeMessage(0xF8);
   //return 0;
-
 
   res=readArguments(argc,argv);
   if(res<0) {
