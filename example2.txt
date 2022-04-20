@@ -14,8 +14,8 @@ notes 9                   c4 = = =
 pattern 10 X x*x X *xxx  X   X x*x X *xxx  X
 notes 10     c4 =  c4          c4 =  c4
 
-mute 2-16 on
-mute 1 off
+mute 2-16 On
+mute 1 Off
 copySound 78.9 to 9
 copySound 20.10 to 10
 copySound 40.1 to 1
@@ -23,14 +23,14 @@ write
 
 start
 wait 1
-mute 9 off
+mute 9 Off
 write
 wait 1 
 pattern 9  *xxx  xx**  xx**  xx**   X X X  x*x*x**x
 notes 9    c4      ==    ==  ==            = = = =
-mute 10 off
+mute 10 Off
 write
 
-wait 2 
+wait 4
 
 stop

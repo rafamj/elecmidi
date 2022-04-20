@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include "tables.h"
 #include "elecmidi.h"
 
 struct DataDumpType dd;
@@ -12,6 +13,7 @@ char* device =  "/dev/dmmidi1" ;
 int channel=0;
 int octave=4;
 FILE *midiFile;
+int lineNumber=0;
 
 #define TRACK_SIZE 18725 //max size of bytes received
 #define MAX_LINE 500
@@ -21,14 +23,15 @@ char lineBufferCopy[MAX_LINE];
 
 
 void printError(char *e1,char *e2) {
+  printf("Error in line %d: %s\n",lineNumber,lineBufferCopy);
   printf("%s %s\n",e1,e2);
+  exit(1);
 }
 
 void openMidi(char *mode) {
    midiFile = fopen(device, mode);
    if (midiFile == NULL) {
       printError("Error: cannot open ", device);
-      exit(1);
    }
 }
 
@@ -83,98 +86,26 @@ void sendCommand(unsigned char *command, long int cl, unsigned char *buffer, lon
 }
 
 
-char *beat2String(int n) {
-    switch(n){
-      case 0: return "16";
-      case 1: return "32";
-      case 2: return "8 Tri";
-      case 3: return "16 Tri";
-    }
-    return "";
-}
-
-char *key2String(int n) {
-    switch(n){
-      case 0: return "C";
-      case 1: return "C#";
-      case 2: return "D";
-      case 3: return "D#";
-      case 4: return "E";
-      case 5: return "F";
-      case 6: return "F#";
-      case 7: return "G";
-      case 8: return "G#";
-      case 9: return "A";
-      case 10: return "A#";
-      case 11: return "B";
-    }
-    return "";
-}
-
-char *scale2String(int n) {
-    switch(n){
-      case 0: return "Chromatic";
-      case 1: return "Ionian";
-      case 2: return "Dorian";
-      case 3: return "Phrygian";
-      case 4: return "Lydian";
-      case 5: return "Mixolidian";
-      case 6: return "Aeolian";
-      case 7: return "Locrian";
-      case 8: return "Harm minor";
-      case 9: return "Melo minor";
-      case 10: return "Major Blues";
-      case 11: return "minor Blues";
-      case 12: return "Diminished";
-      case 13: return "Com.Dim";
-      case 14: return "Major Penta";
-      case 15: return "minor Penta";
-      case 16: return "Raga 1";
-      case 17: return "Raga 2";
-      case 18: return "Raga 3";
-      case 19: return "Arabic";
-      case 20: return "Spanish";
-      case 21: return "Gypsy";
-      case 22: return "Egyptian";
-      case 23: return "Hawaiian";
-      case 24: return "Pelog";
-      case 25: return "Japanese";
-      case 26: return "Ryuku";
-      case 27: return "Chinese";
-      case 28: return "Bass Line";
-      case 29: return "Whole Tone";
-      case 30: return "minor 3rd";
-      case 31: return "Major 3rd";
-      case 32: return "4th Interval";
-      case 33: return "5th Interval";
-      case 34: return "Octave";
-    }
-    return "";
-}
-
-char *offOn2String(unsigned char v){
-  if(v==0) {
-    return "Off";
-  } else {
-    return "On";
+void jumpBlanks(char **line) {
+  while (**line!=0 && (**line==' ' || **line=='\t')){
+    (*line)++;
   }
 }
 
-int readInteger(char *line, char **remain){
+int readInteger(char *line, char **remain,int min, int max){
   char *token;
   int n;
   token=strtok_r(line," ",remain);
   if(!token) {
     printError("Error reading integer. Blank space or end of line found",lineBufferCopy);
-    exit(1);
   } 
   if(!isdigit(token[0]) && token[0]!='+' && token[0]!='-') {
     printError("Error reading integer. found ",token);
-    printError("Error reading integer.",lineBufferCopy);
-    exit(1);
   }
   n=atoi(token);
-
+  if(!(min==0 && max==0) && (n<min || n>max)) {
+    printError("Error integer out of range ",token);
+  }
   return n;
 }
 
@@ -185,12 +116,9 @@ void readNumber(char *line, char *separator, char **remain, int *intPart, int *d
   token=strtok_r(line," ",remain);
   if(!token) {
     printError("Error reading number. Blank space or end of line found",lineBufferCopy);
-    exit(1);
   } 
   if(!isdigit(token[0])) {
     printError("Error reading number. found ",token);
-    printError("Error reading number.",lineBufferCopy);
-    exit(1);
   }
   ip=strtok_r(token,separator,&dp);
   *intPart=atoi(ip);
@@ -201,7 +129,58 @@ void readNumber(char *line, char *separator, char **remain, int *intPart, int *d
   }
 }
 
-long int readRange(char *line){
+char* readString(char *line, char **remain) {
+  char *token;
+  char stringEnd;
+    if(line[0]=='"' || line[0]=='\'') {
+      stringEnd=line[0];
+      line++;
+    } else {
+      stringEnd=' ';
+    }
+    token=line;
+    while(*line && *line !=stringEnd) line++;
+    if(stringEnd!=' ' && !*line) {
+        printError("Error. Untermitated string.",lineBufferCopy);
+    }
+    *line=0;
+    line++;
+    *remain=line;
+    jumpBlanks(remain);
+    return token;
+}
+
+int readTable(char *line, char **remain, char *table[], int tableLen) {
+  jumpBlanks(&line);
+  if(isdigit(line[0])) {
+    int n=readInteger(line,remain,1,tableLen);
+    return n-1;
+  } else {
+    char *token=readString(line,remain);
+    for(int i=0; i<tableLen;i++) {
+      if(strcmp(token,table[i])==0) {
+        return i;
+      }
+    }
+    printf("Error reading table. Item not found, \"%s\"\n",token);
+    printf("Values allowed:\n");
+    for(int i=0; i<tableLen;i++) {
+      printf("%d \"%s\"\n",i,table[i]);
+    }
+    exit(1);
+  }
+}
+
+int readOnOffTable(char *line, char **remain) {
+  jumpBlanks(&line);
+  if(isdigit(line[0])) {
+    return readInteger(line,remain,0,1);
+  } else {
+    return  readTable(line,remain,onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]));
+  }
+}
+
+long int readRange(char *line, int min, int max){
   char *token;
   char *number1;
   char *number2;
@@ -214,15 +193,16 @@ long int readRange(char *line){
       number1=strtok_r(token,"-",&token);
       number2=token;
       //n1=atoi(number1);
-      n1=readInteger(number1,&number1);
+      n1=readInteger(number1,&number1,min,max);
+
       if(number2[0]==0) {
         n2=n1;
       } else {
         //n2=atoi(number2);
-        n2=readInteger(number2,&number2);
+        n2=readInteger(number2,&number2,min,max);
       }
       for(int i=n1;i<=n2;i++) {
-            range |= (1<< (i-1)); 
+            range |= (1L<< (i-1)); 
       } 
       token=strtok_r(line,",",&line);
     }
@@ -234,12 +214,119 @@ int readPart(char *line, char **remain){
   long int range;
 
   token=strtok_r(line," ",remain);
-  range=readRange(token);
+  range=readRange(token,1,16);
+  jumpBlanks(remain);
   return range & 0xffff;
 }
 
+char *note2string(int noteNumber,char *buffer) {
+  int octave;
+  int note;
+  char sharp;
+ 
+  if(noteNumber==0) {
+    buffer[0]=0;
+  } else {
+    noteNumber--;
+    octave=noteNumber/12-1;
+    note=noteNumber%12;
+    buffer[0]=keyTable[note][0];
+    buffer[1]='0'+octave;
+    if(keyTable[note][1]=='#') {
+      buffer[2]='+';
+    } else {
+      buffer[2]=0;
+    }
+    buffer[3]=0;
+  }
+  return buffer;
+}
+
+char *printTableElement(char *table[], int tableLenght, int i) {
+  if(i<0 || i>= tableLenght) return "XXXXXX";
+  else return table[i];
+}
+
+//prints gateTime and velocity
+void printRangeOfValues(char *name,int part,unsigned char *p) {
+  int value;
+  int flag=0;
+  long int range=0;
+
+  value=*p; //first value
+  for(int i=1; i<64; i++) {
+    if(*(p+sizeof(struct stepType )*i)!=value) {
+      flag=1;
+    }
+  }
+  if(!flag) { //all values are equal
+    printf("%s %d %d\n",name, part, value);
+    return;
+  }
+  while(flag) {
+    flag=0;
+    int pendingValue=-1000; //not possible value
+
+    for(int i=0; i<64; i++) {
+      if(!(range & (1L<<i))) {
+         value=*(p+sizeof(struct stepType)*i);
+         printf("%s %d @%d",name, part, i+1);
+         for(int j=i+1;j<64;j++) {
+           if(*(p+sizeof(struct stepType)*j)==value) {
+	     if(*(p+sizeof(struct stepType)*(j-1))==value) { //same value that element before
+	       pendingValue=j+1;
+	     } else {
+	       if(pendingValue!=-1000) {
+	         printf("-%d",pendingValue);
+		 pendingValue=-1000;
+	       }
+	       printf(",%d",j+1);
+	     }
+	     range |= (1L<<j);
+	   }
+	 }
+	 if(pendingValue!=-1000) {
+	   printf("-%d",pendingValue);
+           pendingValue=-1000;
+         }
+	 printf(" %d\n",value);
+      }
+      
+    }
+    
+  }
+}
+
 int printPart(int part) {
-     printf("lastStep %d %d\n",part+1,(dd.part[part].lastStep+16)%17);
+     printf("lastStep %d %d\n",part+1,dd.part[part].lastStep?dd.part[part].lastStep:16);
+     printf("mute %d \"%s\"\n",part+1,printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.part[part].mute));
+     printf("voiceAssign %d \"%s\"\n",part+1,printTableElement(voiceAssignTable,sizeof(voiceAssignTable)/sizeof(voiceAssignTable[0]),dd.part[part].voiceAssign));
+     printf("motionSequence %d \"%s\"\n",part+1,printTableElement(motionSequenceTable,sizeof(motionSequenceTable)/sizeof(motionSequenceTable[0]),dd.part[part].motionSequence));
+     printf("padVelocity %d \"%s\"\n",part+1,printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.part[part].padVelocity));
+     printf("scaleMode %d \"%s\"\n",part+1,printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.part[part].scaleMode));
+     printf("partPriority %d \"%s\"\n",part+1,printTableElement(partPriorityTable,sizeof(partPriorityTable)/sizeof(partPriorityTable[0]),dd.part[part].partPriority));
+     printf("oscType %d \"%s\"\n",part+1,printTableElement(oscTypeTable,sizeof(oscTypeTable)/sizeof(oscTypeTable[0]),dd.part[part].oscTypel+256*dd.part[part].oscTypeh));
+     printf("oscEdit %d %d\n",part+1,dd.part[part].oscEdit);
+     printf("filterType %d \"%s\"\n",part+1,printTableElement(filterTypeTable,sizeof(filterTypeTable)/sizeof(filterTypeTable[0]),dd.part[part].filterType));
+     printf("filterCutoff %d %d\n",part+1,dd.part[part].filterCutoff);
+     printf("filterReso %d %d\n",part+1,dd.part[part].filterReso);
+     printf("filterEG %d %d\n",part+1,(signed char)dd.part[part].filterEG);
+     printf("modType %d \"%s\"\n",part+1,printTableElement(modulationTypeTable,sizeof(modulationTypeTable)/sizeof(modulationTypeTable[0]),dd.part[part].modulationType));
+     printf("modSpeed %d %d\n",part+1,dd.part[part].modulationSpeed);
+     printf("modDepth %d %d\n",part+1,dd.part[part].modulationDepth);
+     printf("EGAttack %d %d\n",part+1,dd.part[part].EGAttack);
+     printf("EGDecay %d %d\n",part+1,dd.part[part].EGDecay);
+     printf("ampLevel %d %d\n",part+1,dd.part[part].ampLevel);
+     printf("ampPan %d %d\n",part+1,(signed char)dd.part[part].ampPan);
+     printf("ampEG %d \"%s\"\n",part+1,printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.part[part].EGOnOff));
+     printf("MFXSend %d \"%s\"\n",part+1,printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.part[part].MFXSend));
+     printf("grooveType %d \"%s\"\n",part+1,printTableElement(grooveTypeTable,sizeof(grooveTypeTable)/sizeof(grooveTypeTable[0]),dd.part[part].grooveType));
+     printf("grooveDepth %d %d\n",part+1,dd.part[part].grooveDepth);
+     printf("IFXOnOff %d \"%s\"\n",part+1,printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.part[part].IFXOnOff));
+     printf("IFXType %d \"%s\"\n",part+1,printTableElement(IFXTypeTable,sizeof(IFXTypeTable)/sizeof(IFXTypeTable[0]),dd.part[part].IFXType));
+     printf("IFXEdit %d %d\n",part+1,dd.part[part].IFXEdit);
+     printf("oscPitch %d %d\n",part+1,(signed char)dd.part[part].oscPitch);
+     printf("oscGlide %d %d\n",part+1,dd.part[part].oscGlide);
      printf("pattern %d ",part+1);
      for(int s=0; s<64; s++) {
        if(s%4==0) printf(" ");
@@ -256,49 +343,32 @@ int printPart(int part) {
      }
      printf("\n");
 
-     for(int n=0;n-4;n++) {
-       printf("#notes %d     ", n+1);
-       for(int s=0; s<32; s++) {
-         if(s%4==0) printf("  ");
-         if(s%16==0) printf("  ");
-           printf("%2d ",dd.part[part].step[s].note[n]);
+     printf("notes %d     ",part+1);
+     for(int s=0; s<64; s++) {
+       char buffer[4];
+       int l=0;
+
+       if(s==32)       printf("\nnotes %d @33 ", part+1);
+       else if(s%16==0) printf("      ");
+       else if(s%4==0)  printf("  ");
+       for(int n=0;n-4;n++) {
+         printf("%s",note2string(dd.part[part].step[s].note[n],buffer));
+	 l+=strlen(buffer);
        }
-       printf("\n#notes %d @33 ", n+1);
-       for(int s=32; s<64; s++) {
-         if(s%4==0) printf("  ");
-         if(s%16==0) printf("  ");
-           printf("%2d ",dd.part[part].step[s].note[n]);
+       if(l>0) {
+         for(int i=l;i<12;i++) printf(" ");
        }
-       printf("\n");
-     }
-     
-     printf("gateTime %d @1-32  ",part+1);
-     for(int s=0; s<32; s++) {
-       if(s%16==0) printf("  ");
-       printf("%3d ",dd.part[part].step[s].gateTime);
-     }
-     printf("\ngateTime %d @33-64 ",part+1);
-     for(int s=32; s<64; s++) {
-       if(s%16==0) printf("  ");
-       printf("%3d ",dd.part[part].step[s].gateTime);
      }
      printf("\n");
-     printf("velocity %d @1-32  ",part+1);
-     for(int s=0; s<32; s++) {
-       if(s%16==0) printf("  ");
-       printf("%3d ",dd.part[part].step[s].velocity);
-     }
-     printf("\nvelocity %d @33-64 ",part+1);
-     for(int s=32; s<64; s++) {
-       if(s%16==0) printf("  ");
-       printf("%3d ",dd.part[part].step[s].velocity);
-     }
+     printRangeOfValues("gateTime",part+1,&dd.part[part].step[0].gateTime);
+     printRangeOfValues("velocity",part+1,&dd.part[part].step[0].velocity);
      printf("\n\n");
+
 }
 
 void printSlot(int slot) {
   if (dd.motionSequence.part[slot]==0) return; //Off
-  printf("motion %d %d %d",slot,dd.motionSequence.part[slot],dd.motionSequence.destination[slot]);
+  printf("motion %d %d \"%s\"",slot,dd.motionSequence.part[slot],printTableElement(destinationTable,sizeof(destinationTable)/sizeof(destinationTable[0]),dd.motionSequence.destination[slot]));
   for(int i=0;i<64;i++) {
     printf(" %3d",dd.motionSequence.motion[slot][i]);
   }
@@ -309,39 +379,49 @@ int printPattern(char *line) {
    int partRange;
    char *token;
    char *remain;
+   int all=0;
 
     token=strtok_r(line," ",&remain); ///?????
     if(token==0) {
+      all=1;
       partRange=0xffff;
     } else {
       partRange=readPart(token,&remain);
     }
-   printf("name %s\n",dd.name);
-   printf("length %x\n",dd.length+1);
-   printf("\n");
-   /*
-   int tt=dd->tempo1+256*dd->tempo2;
+   if(all) {
+   printf("name \"%s\"\n",dd.name);
+   int tt=dd.tempo1+256*dd.tempo2;
    printf("tempo %d.%d\n", tt/10,tt%10);
-   printf("swing %hd\n",dd->swing);
-   printf("beat %s\n",beat2String(dd->beat));// 16, 32, 8 tri, 16 tri
-   printf("key %s\n",key2String(dd->key));// 0-11 =C - B 
-   printf("scale %s\n",scale2String(dd->scale));
-   printf("chordset %x\n",dd->chordset+1);
-   printf("play level %d\n",127-dd->playlevel);
-   printf("Alternate 13-14 %s\n",offOn2String(dd->alternate1314));
-   printf("Alternate 15-16 %s\n",offOn2String(dd->alternate1516));
-   printf("Master FX %d\n",dd->masterFX[1]);
-   */
-//gate time TIE=255
-
+   int sw=(signed char)dd.swing;if(sw==48) sw=50; if(sw==-48) sw=-50;
+   printf("swing %d%%\n",sw);
+   printf("length %x\n",dd.length+1);
+   printf("beat \"%s\"\n",printTableElement(beatTable,sizeof(beatTable)/sizeof(beatTable[0]),dd.beat));
+   printf("key \"%s\"\n",printTableElement(keyTable,sizeof(keyTable)/sizeof(keyTable[0]),dd.key));
+   printf("scale \"%s\"\n",printTableElement(scaleTable,sizeof(scaleTable)/sizeof(scaleTable[0]),dd.scale));
+   printf("chordset %x\n",dd.chordset+1);
+   printf("level %d\n",127-dd.playlevel);
+   printf("alternate1314 \"%s\"\n",printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.alternate1314));
+   printf("alternate1516 \"%s\"\n",printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.alternate1516));
+   printf("gateArpPattern %d\n",dd.touchScale.gateArpPattern+1);
+   printf("gateArpSpeed %d\n",dd.touchScale.gateArpSpeed);
+   printf("gateArpTime %d\n",(signed char)dd.touchScale.gateArpTimel+(signed char)dd.touchScale.gateArpTimeh*256);
+   //printf("gateArpTime l %d\n",(signed char)dd.touchScale.gateArpTimel);
+   //printf("gateArpTime h %d\n",(signed char)dd.touchScale.gateArpTimeh);
+   printf("MFXType \"%s\"\n",printTableElement(MFXTypeTable,sizeof(MFXTypeTable)/sizeof(MFXTypeTable[0]),dd.masterFX.type));
+   printf("MFXPadX %d\n",dd.masterFX.XYpadX);
+   printf("MFXPadY %d\n",dd.masterFX.XYpadY);
+   printf("MFXHold \"%s\"\n",printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.masterFX.MFXHold?1:0));
+   printf("\n");
+   for(int slot=0;slot<24;slot++) {
+     printSlot(slot);
+   }
+   printf("\n");
+   }
    for(int part=0;part<16;part++) {
      if(partRange & 1) {
        printPart(part);
      }
      partRange = partRange>>1;
-   }
-   for(int slot=0;slot<24;slot++) {
-     printSlot(slot);
    }
    return 1;
 }
@@ -495,23 +575,14 @@ int readStep0(char *line, char **remain){
     token=strtok_r(*remain," ",remain);
     //step0=atoi(token+1);
     token++;
-    step0=readInteger(token,&token);
+    step0=readInteger(token,&token,1,64);
   } else {
     return 1;
-  }
-  if(step0<1 || step0>64) {
-    printError("Error reading step number",token);
-    return -1;
   }
   return step0;
 
 }
 
-void jumpBlanks(char **line) {
-  while (**line!=0 && (**line==' ' || **line=='\t')){
-    (*line)++;
-  }
-}
 
 int note2midi(char note, int octave, int alt) {
   int n;
@@ -578,7 +649,6 @@ int readStepNotes(char *notes,int part,int step){
       step++; //search first non silence note
     }
     if(step<64) {
-      //printf("putting note %d %d\n",n,midiNote); 
       dd.part[part].step[step].note[n]=midiNote;
     }
     n++;
@@ -594,7 +664,7 @@ int readRepeat(char **s) {
   if(remain[0]==0) {
     return 1;
   } else {
-    return readInteger(remain, &remain);
+    return readInteger(remain, &remain,0,0);
   }
 }
 
@@ -606,7 +676,6 @@ int readNotes(char *line) {
   int step[16];
   int repeat=1;
   
-  //token=strtok_r(line," ",&remain);
   partRange=readPart(line,&remain);
   if(partRange==-1) {
     return -1;
@@ -619,6 +688,7 @@ int readNotes(char *line) {
   }
 
   token=strtok_r(remain," ",&remain);
+  if(token==0) return 0;
   repeat=readRepeat(&token);
   for(int i=0;i<16;i++) { 
     step[i]=step0-1;
@@ -655,21 +725,274 @@ int readNotes(char *line) {
 }
 
 int readName(char *line) {
+  char *remain;
+  char *name;
+
+  name=readString(line,&remain);
     for(int i=0;i<17;i++) {
-      char c=line[i];
+      char c=name[i];
       if(c==0) {
          dd.name[i]=0;    
 	 return 0;
       }
       if(c>=32 && c<127) {
-         dd.name[i]=line[i];    
+         dd.name[i]=name[i];    
       } else {
-        printError("Error in name",line);
+        printError("Error in name",name);
         return -3;
       }
     }
     dd.name[17]=0;    
     return 0;
+}
+
+int readTempo(char *line) {
+  int tempo;
+  int intPart,decPart;
+  char *remain;
+
+  readNumber(line,".",&line,&intPart,&decPart);
+  if(intPart<20 || intPart>300) {
+    printError("Error in tempo","");
+    return -1;
+  }
+  while(decPart>=10) {
+    decPart=decPart/10;
+  }
+  tempo=intPart*10+decPart;
+  dd.tempo1=tempo%256;
+  dd.tempo2=tempo/256;
+  return 0;
+}
+
+int readSwing(char *line) {
+  int swing;
+  char *remain;
+
+  swing=readInteger(line,&remain,-50,50);
+  if(swing>48) swing=48;
+  if(swing<-48) swing=-48;
+  dd.swing=swing;
+  return 0;
+}
+
+int readLength(char *line) {
+  int length;
+  char *remain;
+
+  length=readInteger(line,&remain,1,4);
+  dd.length=length-1;
+  return 0;
+}
+
+int readBeat(char *line) {
+  int beat;
+  char *remain;
+
+  beat=readTable(line,&remain,beatTable,sizeof(beatTable)/sizeof(beatTable[0]));
+  dd.beat=beat;
+  return 0;
+}
+
+int readKey(char *line) {
+  int key;
+  char *remain;
+
+  key=readTable(line,&remain,keyTable,sizeof(keyTable)/sizeof(keyTable[0]));
+  dd.key=key;
+  return 0;
+}
+
+int readScale(char *line) {
+  int scale;
+  char *remain;
+
+  scale=readTable(line,&remain,scaleTable,sizeof(scaleTable)/sizeof(scaleTable[0]));
+  dd.scale=scale;
+  return 0;
+}
+
+int readChordset(char *line) {
+  int chordset;
+  char *remain;
+
+  chordset=readInteger(line,&remain,1,5);
+  dd.chordset=chordset-1;
+  return 0;
+}
+
+int readLevel(char *line) {
+  int level;
+  char *remain;
+
+  level=readInteger(line,&remain,0,127);
+  dd.playlevel=127-level;
+  return 0;
+}
+
+int readAlternate1314(char *line) {
+  int a;
+  char *remain;
+
+  a=readOnOffTable(line,&remain);
+  dd.alternate1314=a;
+  return 0;
+}
+
+int readAlternate1516(char *line) {
+  int a;
+  char *remain;
+
+  a=readOnOffTable(line,&remain);
+  dd.alternate1516=a;
+  return 0;
+}
+
+int readGateArpPattern(char *line) {
+  int p;
+  char *remain;
+
+  p=readInteger(line,&remain,1,50);
+  dd.touchScale.gateArpPattern=p-1;
+  return 0;
+}
+
+int readGateArpSpeed(char *line) {
+  int s;
+  char *remain;
+
+  s=readInteger(line,&remain,0,127);
+  dd.touchScale.gateArpSpeed=s;
+  return 0;
+}
+
+int readGateArpTime(char *line) {
+  int t;
+  char *remain;
+
+  t=readInteger(line,&remain,-100,100);
+  dd.touchScale.gateArpTimel=t%256;
+  dd.touchScale.gateArpTimeh=t/256;
+  return 0;
+}
+
+int readMFXType(char *line) {
+  int t;
+  char *remain;
+
+  t=readTable(line,&remain,MFXTypeTable,sizeof(MFXTypeTable)/sizeof(MFXTypeTable[0]));
+  dd.masterFX.type=t;
+  return 0;
+}
+
+int readMFXPadX(char *line) {
+  int x;
+  char *remain;
+
+  x=readInteger(line,&remain,0,127);
+  dd.masterFX.XYpadX=x;
+  return 0;
+}
+
+int readMFXPadY(char *line) {
+  int y;
+  char *remain;
+
+  y=readInteger(line,&remain,0,127);
+  dd.masterFX.XYpadY=y;
+  return 0;
+}
+
+int readMFXHold(char *line) {
+  int h;
+  char **remain;
+  char *token;
+
+  jumpBlanks(&line);
+  if(isdigit(line[0])) {
+    token=strtok_r(line," ",remain);
+    int h=atoi(token);
+    if(h<0 || h>127) {
+      printError("Error in MFXHold",lineBufferCopy);
+    }
+  } else if(line[0]=='"') {
+    token=++line;
+    while(*line && *line !='"') line++;
+    if(!*line) {
+      printError("Error in MFXHold. Untermitated string.",lineBufferCopy);
+    }
+    *line++=0;
+    remain=&line;
+    jumpBlanks(remain);
+    if(strcmp(token,"On")==0) {
+      h=1;
+    } else if(strcmp(token,"Off")==0) {
+      h=0;
+    } else {
+      printf("Error reading MFXHold. %s",token);
+      printf("Values allowed: \"On\" \"Off\"\n");
+      exit(1);
+    }
+  }
+  dd.masterFX.MFXHold=h;
+  return 0;
+}
+
+void putValueInRange(int partRange, unsigned char *p,unsigned char value) {
+  for(int part=0;part<16;part++) {
+    if(partRange & 1) {
+      *(p+part*sizeof(struct partType))=value;
+    }
+    partRange=partRange>>1;
+  }
+}
+
+int readLastStep(char *line) {
+  int partRange;
+  int lst;
+  char *remain;
+  char *token;
+
+  partRange=readPart(line,&remain);
+  lst=readInteger(remain,&remain,1,16);
+  putValueInRange(partRange,&dd.part[0].lastStep,lst%16);
+  return 0;
+}
+
+int readIntegerPart(char *line, int min, int max, unsigned char *p) {
+  int partRange;
+  int n;
+  char *remain;
+  char *token;
+
+  partRange=readPart(line,&remain);
+  n=readInteger(remain,&remain,min,max);
+  putValueInRange(partRange,p,n);
+  return 0;
+}
+
+int readOnOffPart(char *line,unsigned char *p) {
+  int partRange;
+  int value;
+  char *remain;
+  char *token;
+
+  partRange=readPart(line,&remain);
+  value=readOnOffTable(remain,&remain);
+  putValueInRange(partRange,p,value);
+  return 0;
+}
+
+int readTablePart(char *line, char *table[], int size, unsigned char *p) {
+  int partRange;
+  int va;
+  char *remain;
+  char *token;
+
+  partRange=readPart(line,&remain);
+  va=readTable(remain,&remain,table,size);
+  putValueInRange(partRange,p,va);
+  return 0;
 }
 
 int readGateTime(char *line) {
@@ -679,7 +1002,6 @@ int readGateTime(char *line) {
   char *remain;
   char *token;
 
-  //token=strtok_r(line," ",&remain);
   partRange=readPart(line,&remain);
   if(partRange==-1) {////
     return -1;
@@ -689,7 +1011,7 @@ int readGateTime(char *line) {
   if(remain[0]==0) { //last number
     remain=token;
   } else if(token[0]=='@') {
-    stepRange=readRange(token+1);
+    stepRange=readRange(token+1,1,64);
   } else {
     printError("Error in Gate Time","");
     return -1;
@@ -698,11 +1020,7 @@ int readGateTime(char *line) {
   if(stepRange==0) {
     return -2;
   }
-  gt=readInteger(remain,&remain);
-  if(gt==0) {
-    printError("Error in Gate Time","");
-    return -1;
-  }
+  gt=readInteger(remain,&remain,0,0); //apparently gt can be 255 for ties
   long int origStepRange=stepRange;
   for(int part=0;part<16;part++) {
     if(partRange & 1) {
@@ -718,37 +1036,6 @@ int readGateTime(char *line) {
   }
   return 0;
 }
-
-int readMute(char *line) {
-  int partRange;
-  int mu;
-  char *remain;
-  char *token;
-
-  //token=strtok_r(line," ",&remain);
-  partRange=readPart(line,&remain);
-  if(partRange==-1) {////
-          return -1;
-  }
-  jumpBlanks(&remain);
-  token=strtok_r(remain," ",&remain);
-  if(strcmp(token,"on")==0) {
-    mu=1;
-  } else if(strcmp(token,"off")==0) {
-    mu=0;
-  } else {
-    printError("Error in mute",remain);
-    return -1;
-  }
-  for(int part=0;part<16;part++) {
-    if(partRange & 1) {
-       dd.part[part].mute=mu;
-    }
-    partRange=partRange>>1;
-  }
-  return 0;
-}
-
 
 int readVelocity(char *line) {
   int partRange;
@@ -767,7 +1054,7 @@ int readVelocity(char *line) {
   if(remain[0]==0) { //last number
     remain=token;
   } else if(token[0]=='@') {
-    stepRange=readRange(token+1);
+    stepRange=readRange(token+1,1,64);
   } else {
     printError("Error in Velocity","");
     return -1;
@@ -776,23 +1063,17 @@ int readVelocity(char *line) {
   if(stepRange==0) {
     return -2;
   }
-  v=readInteger(remain,&remain);
-  if(v==0) {
-    printError("Error in Velocity","");
-    return -1;
-  }
-  long int origStepRange=stepRange;
+  v=readInteger(remain,&remain,0,127);
   for(int part=0;part<16;part++) {
-    if(partRange & 1) {
-      stepRange=origStepRange;
+    if(partRange & (1<<part)) {
       for(int step=0; step<64; step++) {
-        if(stepRange & 1) {
+        if(stepRange & (1L<<step)) {
           dd.part[part].step[step].velocity=v;
         }
-        stepRange=stepRange>>1;
+        //stepRange=stepRange>>1;
       }
     }
-    partRange=partRange>>1;
+    //partRange=partRange>>1;
   }
   return 0;
 }
@@ -814,7 +1095,7 @@ int readTranspose(char *line) {
   if(remain[0]==0) { //last number
     remain=token;
   } else if (token[0]=='@'){
-    stepRange=readRange(token+1);
+    stepRange=readRange(token+1,1,64);
   } else {
     printError("Error in Transpose","");
     return -1;
@@ -823,11 +1104,7 @@ int readTranspose(char *line) {
   if(stepRange==0) {
     return -2;
   }
-  tr=readInteger(remain,&remain);
-  if(tr==0) {
-    printError("Error in Transpose","");
-    return -1;
-  }
+  tr=readInteger(remain,&remain,0,0);
   long int origStepRange=stepRange;
   for(int part=0;part<16;part++) {
     if(partRange & 1) {
@@ -847,97 +1124,6 @@ int readTranspose(char *line) {
   }
   return 0;
 }
-
-int readLength(char *line) {
-  int length;
-  char *remain;
-
-  length=readInteger(line,&remain);
-  if(length<1 || length>4) {
-    printError("Error in length","");
-    return -1;
-  }
-  dd.length=length-1;
-  return 0;
-}
-
-int readVoice(char *line) {
-  char *token;
-  int voice;
-
-  token=strtok_r(line," ",&line);
-  if(isdigit(token[0])) {
-    voice=readInteger(token,&token);
-    if(voice >=0 && voice <=3) {
-      return voice;
-    } else {
-      return -1;
-    }
-  } else if (strcmp(token,"Mono1")==0){
-    return 0;
-  } else if (strcmp(token,"Mono2")==0){
-    return 1;
-  } else if (strcmp(token,"Poly1")==0){
-    return 2;
-  } else if (strcmp(token,"Poly2")==0){
-    return 3;
-  } else {
-    return -1;
-  }
-}
-
-int readVoiceAssign(char *line) {
-  int partRange;
-  int va;
-  char *remain;
-  char *token;
-
-  //token=strtok_r(line," ",&remain);
-  partRange=readPart(line,&remain);
-  if(partRange==-1) {
-    return -1;
-  }
-  va=readVoice(remain);
-  if(va==-1) {
-    printError("Error in Voice Assign",remain);
-    return -1;
-  }
-  for(int part=0;part<16;part++) {
-    if(partRange & 1) {
-      //printf("putting part %d last step\n",lst);
-      dd.part[part].voiceAssign=va;
-    }
-    partRange=partRange>>1;
-  }
-  return 0;
-}
-
-int readLastStep(char *line) {
-  int partRange;
-  int lst;
-  char *remain;
-  char *token;
-
-  //token=strtok_r(line," ",&remain);
-  partRange=readPart(line,&remain);
-  if(partRange==-1) {
-    return -1;
-  }
-  lst=readInteger(remain,&remain);
-  if(lst<1 || lst>16) {
-    printError("Error in last Step","");
-    return -1;
-  }
-  for(int part=0;part<16;part++) {
-    if(partRange & 1) {
-      //printf("putting part %d last step\n",lst);
-      dd.part[part].lastStep=lst%16;
-    }
-    partRange=partRange>>1;
-  }
-  return 0;
-}
-
 //silence 'x'
 //4 silences 'X'
 //note '*'
@@ -1041,11 +1227,7 @@ int readGoto(char *line) {
   char *num;
 
   num=line;
-  int pattern=readInteger(line,&line);
-  if(pattern<1 || pattern>250) {
-    printError("Wrong pattern number:",num);
-    return -1;
-  }
+  int pattern=readInteger(line,&line,1,250);
   pattern--;
   mm=0;
   bb=pattern<128?0:1;
@@ -1106,11 +1288,7 @@ int readCopy(char *line) {
     printError("'to' expected. Found ",token);
     return -1;
   }
-  p=readInteger(line,&line);
-  if(p<1 || p>16) {
-    printError("Error in part destination","");
-    return -1;
-  }
+  p=readInteger(line,&line,1,16);
 
   patternDataDump(pattern);
   unsigned char *orig=(unsigned char *)&auxData.part[part-1];
@@ -1127,12 +1305,12 @@ int oscType(char *line) {
   char *remain;
   char *token;
 
-  //token=strtok_r(line," ",&remain);
   partRange=readPart(line,&remain);
   if(partRange==-1) {
     return -1;
   }
-  osct=readInteger(remain,&remain);
+  //osct=readInteger(remain,&remain);
+  osct=readTable(remain,&remain,oscTypeTable,sizeof(oscTypeTable)/sizeof(oscTypeTable[0]));
   for(int part=0;part<16;part++) {
     if(partRange & 1) {
       dd.part[part].oscTypel=osct%256;
@@ -1162,20 +1340,16 @@ int readPeek(char *line) {
   jumpBlanks(&remain);
   if(remain[0]=='p') {
     remain++;
-    part=readInteger(remain,&remain);
-    if(part<1 || part>16) {
-      printError("Error in part source","");
-      return -1;
-    }
+    part=readInteger(remain,&remain,1,16);
   }
-  addr=readInteger(remain,&remain);
+  addr=readInteger(remain,&remain,0,0);
   jumpBlanks(&remain);
   if(remain[0]) {
     type=remain[0];
     remain++;
     jumpBlanks(&remain);
     if(remain[0]) {
-      n=readInteger(remain,&remain);
+      n=readInteger(remain,&remain,0,0);
     }
   }
   for(int i=0;i<n;i++) {
@@ -1206,19 +1380,15 @@ int readPoke(char *line) {
   jumpBlanks(&remain);
   if(remain[0]=='p') {
     remain++;
-    part=readInteger(remain,&remain);
-    if(part<1 || part>16) {
-      printError("Error in part source","");
-      return -1;
-    }
+    part=readInteger(remain,&remain,1,16);
   }
-  addr=readInteger(remain,&remain);
+  addr=readInteger(remain,&remain,0,0);
   jumpBlanks(&remain);
   if(!isdigit(remain[0])) {
     type=remain[0];
     remain++;
     if(isdigit(remain[0])) {
-      n=readInteger(remain,&remain);
+      n=readInteger(remain,&remain,0,0);
     }
   }
   for(int i=0;i<n;i++) {
@@ -1226,7 +1396,7 @@ int readPoke(char *line) {
     if(type=='c') {
       value=strtok_r(remain," ",&remain)[0];
     } else {
-      value=readInteger(remain,&remain);
+      value=readInteger(remain,&remain,0,0);
     }
     if (type=='d') {
       if(part!=0) {
@@ -1252,13 +1422,13 @@ int readMotionSequence(char *line) {
   int destination;
   int i=0;
   int lpart,rpart;
-
-  slot=readInteger(line,&remain);
-  part=readInteger(remain,&remain);
-  destination=readInteger(remain,&remain);
+  slot=readInteger(line,&remain,0,23);
+  part=readInteger(remain,&remain,1,16);
+  destination=readTable(remain,&remain,destinationTable,sizeof(destinationTable)/sizeof(destinationTable[0]));
   dd.motionSequence.part[slot]=part;
   dd.motionSequence.destination[slot]=destination;
   jumpBlanks(&remain);
+
   while(isdigit(remain[0])) {
     unsigned char s;
     readNumber(remain,":",&remain,&lpart,&rpart);
@@ -1283,55 +1453,141 @@ int readMotionSequence(char *line) {
   return 0;
 }
 
+int compare(char *input, char *command) {
+ return strcmp(input,command);
+}
+
 int readLine(char *line) {
   char *command;
   char *remain;
 
   command=strtok_r(line," ",&remain);
   if(!command) return 0; //blank line
-  if(0==strncmp(command,"pattern",2)) {
-     return readPattern(remain);
-  } else if(0==strncmp(command,"notes",2)) {
-     return readNotes(remain);
-  } else if(0==strncmp(command,"name",2)) {
+  if(0==compare(command,"name")) {
      return readName(remain);
-  } else if(0==strncmp(command,"gateTime",2)) {
-     return readGateTime(remain);
-  } else if(0==strncmp(command,"mute",2)) {
-     return readMute(remain);
-  } else if(0==strncmp(command,"voiceAssign",2)) {
-     return readVoiceAssign(remain);
-  } else if(0==strncmp(command,"velocity",2)) {
-     return readVelocity(remain);
-  } else if(0==strncmp(command,"lastStep",2)) {
-     return readLastStep(remain);
-  } else if(0==strncmp(command,"length",2)) {
+  } else if(0==compare(command,"tempo")) {
+     return readTempo(remain);
+  } else if(0==compare(command,"swing")) {
+     return readSwing(remain);
+  } else if(0==compare(command,"length")) {
      return readLength(remain);
-  } else if(0==strncmp(command,"transpose",2)) {
-     return readTranspose(remain);
-  } else if(0==strncmp(command,"print",2)) {
-     return printPattern(remain);
-  } else if(0==strncmp(command,"start",3)) {
-     return start(remain);
-  } else if(0==strncmp(command,"stop",3)) {
-     return stop(remain);
-  } else if(0==strncmp(command,"goto",2)) {
-     return readGoto(remain);
-  } else if(0==strncmp(command,"wait",2)) {
-     return readWait(remain);
-  } else if(0==strncmp(command,"read",2)) {
-     return read(remain);
-  } else if(0==strncmp(command,"write",2)) {
-     return write(remain);
-  } else if(0==strncmp(command,"copySound",2)) {
-     return readCopy(remain);
-  } else if(0==strncmp(command,"oscType",2)) {
+  } else if(0==compare(command,"beat")) {
+     return readBeat(remain);
+  } else if(0==compare(command,"key")) {
+     return readKey(remain);
+  } else if(0==compare(command,"scale")) {
+     return readScale(remain);
+  } else if(0==compare(command,"chordset")) {
+     return readChordset(remain);
+  } else if(0==compare(command,"level")) {
+     return readLevel(remain);
+  } else if(0==compare(command,"alternate1314")) {
+     return readAlternate1314(remain);
+  } else if(0==compare(command,"alternate1516")) {
+     return readAlternate1516(remain);
+  } else if(0==compare(command,"gateArpPattern")) {
+     return readGateArpPattern(remain);
+  } else if(0==compare(command,"gateArpSpeed")) {
+     return readGateArpSpeed(remain);
+  } else if(0==compare(command,"gateArpTime")) {
+     return readGateArpTime(remain);
+  } else if(0==compare(command,"MFXType")) {
+     return readMFXType(remain);
+  } else if(0==compare(command,"MFXPadX")) {
+     return readMFXPadX(remain);
+  } else if(0==compare(command,"MFXPadY")) {
+     return readMFXPadY(remain);
+  } else if(0==compare(command,"MFXHold")) {
+     return readMFXHold(remain);
+  } else if(0==compare(command,"lastStep")) {
+     return readLastStep(remain);
+  } else if(0==compare(command,"mute")) {
+     return readOnOffPart(remain,&dd.part[0].mute);
+  } else if(0==compare(command,"voiceAssign")) {
+     return readTablePart(remain,voiceAssignTable,sizeof(voiceAssignTable)/sizeof(voiceAssignTable[0]),&dd.part[0].voiceAssign);
+  } else if(0==compare(command,"motionSequence")) {
+     return readTablePart(remain,motionSequenceTable,sizeof(motionSequenceTable)/sizeof(motionSequenceTable[0]),&dd.part[0].motionSequence);
+  } else if(0==compare(command,"padVelocity")) {
+     return readOnOffPart(remain,&dd.part[0].padVelocity);
+  } else if(0==compare(command,"scaleMode")) {
+     return readOnOffPart(remain,&dd.part[0].scaleMode);
+  } else if(0==compare(command,"partPriority")) {
+     return readTablePart(remain,partPriorityTable,sizeof(partPriorityTable)/sizeof(partPriorityTable[0]),&dd.part[0].partPriority);
+  } else if(0==compare(command,"oscType")) {
      return oscType(remain);
-  } else if(0==strncmp(command,"peek",2)) {
+  } else if(0==compare(command,"oscEdit")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].oscEdit);
+  } else if(0==compare(command,"filterType")) {
+     return readTablePart(remain,filterTypeTable,sizeof(filterTypeTable)/sizeof(filterTypeTable[0]),&dd.part[0].filterType);
+  } else if(0==compare(command,"filterCutoff")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].filterCutoff);
+  } else if(0==compare(command,"filterReso")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].filterReso);
+  } else if(0==compare(command,"filterEG")) {
+     return readIntegerPart(remain,-63,63,&dd.part[0].filterEG);
+  } else if(0==compare(command,"modType")) {
+     return readTablePart(remain,modulationTypeTable,sizeof(modulationTypeTable)/sizeof(modulationTypeTable[0]),&dd.part[0].modulationType);
+  } else if(0==compare(command,"modSpeed")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].modulationSpeed);
+  } else if(0==compare(command,"modDepth")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].modulationDepth);
+  } else if(0==compare(command,"EGAttack")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].EGAttack);
+  } else if(0==compare(command,"EGDecay")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].EGDecay);
+  } else if(0==compare(command,"ampLevel")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].ampLevel);
+  } else if(0==compare(command,"ampPan")) {
+     return readIntegerPart(remain,-63,63,&dd.part[0].ampPan);
+  } else if(0==compare(command,"ampEG")) {
+     return readOnOffPart(remain,&dd.part[0].EGOnOff);
+  } else if(0==compare(command,"MFXSend")) {
+     return readOnOffPart(remain,&dd.part[0].MFXSend);
+  } else if(0==compare(command,"grooveType")) {
+     return readTablePart(remain,grooveTypeTable,sizeof(grooveTypeTable)/sizeof(grooveTypeTable[0]),&dd.part[0].grooveType);
+  } else if(0==compare(command,"grooveDepth")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].grooveDepth);
+  } else if(0==compare(command,"IFXOnOff")) {
+     return readOnOffPart(remain,&dd.part[0].IFXOnOff);
+  } else if(0==compare(command,"IFXType")) {
+     return readTablePart(remain,IFXTypeTable,sizeof(IFXTypeTable)/sizeof(IFXTypeTable[0]),&dd.part[0].IFXType);
+  } else if(0==compare(command,"IFXEdit")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].IFXEdit);
+  } else if(0==compare(command,"oscPitch")) {
+     return readIntegerPart(remain,-63,63,&dd.part[0].oscPitch);
+  } else if(0==compare(command,"oscGlide")) {
+     return readIntegerPart(remain,0,127,&dd.part[0].oscGlide);
+  } else if(0==compare(command,"pattern")) {
+     return readPattern(remain);
+  } else if(0==compare(command,"notes")) {
+     return readNotes(remain);
+  } else if(0==compare(command,"gateTime")) {
+     return readGateTime(remain);
+  } else if(0==compare(command,"velocity")) {
+     return readVelocity(remain);
+  } else if(0==compare(command,"transpose")) {
+     return readTranspose(remain);
+  } else if(0==compare(command,"print")) {
+     return printPattern(remain);
+  } else if(0==compare(command,"start")) {
+     return start(remain);
+  } else if(0==compare(command,"stop")) {
+     return stop(remain);
+  } else if(0==compare(command,"goto")) {
+     return readGoto(remain);
+  } else if(0==compare(command,"wait")) {
+     return readWait(remain);
+  } else if(0==compare(command,"read")) {
+     return read(remain);
+  } else if(0==compare(command,"write")) {
+     return write(remain);
+  } else if(0==compare(command,"copySound")) {
+     return readCopy(remain);
+  } else if(0==compare(command,"peek")) {
      return readPeek(remain);
-  } else if(0==strncmp(command,"poke",2)) {
+  } else if(0==compare(command,"poke")) {
      return readPoke(remain);
-  } else if(0==strncmp(command,"motion",2)) {
+  } else if(0==compare(command,"motion")) {
      return readMotionSequence(remain);
   } else if(command[0]=='#') { //comment
      return 0;
@@ -1389,9 +1645,7 @@ int immediate=0;
   }
   if(device==0) {
     printError("no midi device found","");
-    exit(1);
   }
-  
   char c=getchar();
   while(c!=EOF) {
     if(i<MAX_LINE-1){
@@ -1411,6 +1665,7 @@ int immediate=0;
       if(immediate) {
         read(0);
       }
+      lineNumber++;
       res=readLine(lineBuffer);
       if(res<0){
         printError(":: ",lineBufferCopy);

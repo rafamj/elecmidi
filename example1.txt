@@ -1,6 +1,7 @@
 #selects pattern 1 (The pattern is only modified in memory. In order to save it permanently is necessary to pulse the "write" button)
 goto 1
 #reads the pattern from the electribe
+#it is advisable to do always a read at the beginning, to initialize the pattern
 read
 
 name Test
@@ -36,7 +37,7 @@ pattern 1 @33  *_x* X *x*x *x*x   X **** X
 notes 1     A1 g B    C^ D   D+ Cv  B A    C^ d e f  c d e f
 notes 1 @33       C D   D+ Cv  B A    C^ d e f  c d 
 
-transpose 1 @1-6 -3
+#transpose 1 @1-6 -3
 
 
 
@@ -64,7 +65,10 @@ pattern 4  @49 ____ ____ ____ ____
 notes 4       d2f^*16     e2g^*16
 notes 4 @33   d2f^  =*15     e2g^ =*15
 #prints the data to stdout
+#prints parts 1-4:
 #print 1-4
+#prints all:
+#print
 
 #poke command writes a value in an address
 #the type parameter can be the type of the value (u=byte, d=2 byte integer, c=character)
@@ -75,7 +79,7 @@ poke 40 0 # equivalent to poke 20 u1 0 # equivalent to poke 20 u1 0
 poke p3 8 d 20  
 
 #peek [part] <address> [type[number of values]]
-#print the 10 first values in part 3 
+#prints the 10 first values in part 3 
 peek p3 0 u10
 
 #motion sequence. parameters slot (0-23) part(1-16) destination(0-19) sequence (64 values from 0 to 127))
@@ -93,8 +97,8 @@ write
 #performance commands:
 
 #mutes all parts except 1
-mute 2-16 on
-mute 1 off
+mute 2-16 On
+mute 1 Off
 write
 
 start
@@ -103,16 +107,16 @@ start
 wait 0.15 
 
 #unmutes part 2
-mute 2 off
+mute 2 Off
 write
 
 #waits 1 cycle (length * last step of part 0)
 wait 1 
-mute 3 off
-transpose 1-4 6
+mute 3 Off
+#transpose 1-4 6
 write
 
-waits 1 cycle + 15 steps
+#waits 1 cycle + 15 steps
 wait 1.15 
 
 stop
