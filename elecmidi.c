@@ -6,6 +6,8 @@
 #include "tables.h"
 #include "elecmidi.h"
 
+//#define PRINT_RESERVED 
+
 struct DataDumpType dd;
 struct DataDumpType auxData;
 
@@ -297,6 +299,27 @@ void printRangeOfValues(char *name,int part,unsigned char *p) {
   }
 }
 
+void printPartReserved(int part, unsigned char* p, int size) {
+  int baseAddress= p-&dd.part[part].lastStep;
+  for(int i=0;i<size;i++) {
+    printf("part %d reserved %d %d\n",part+1,baseAddress+i,*(p+i));
+  }
+}
+
+void printStepReserved(int part, int step, unsigned char* p, int size) {
+  int baseAddress= p-&dd.part[part].lastStep;
+  for(int i=0;i<size;i++) {
+    printf("part %d step %d reserved %d %d\n",part+1,step+1,baseAddress+i,*(p+i));
+  }
+}
+
+void printReserved(char *type, unsigned char* p, int size, int offset) {
+  int baseAddress= p-&dd.header[0]-offset;
+  for(int i=0;i<size;i++) {
+    printf("%s %d %d\n",type,baseAddress+i,*(p+i));
+  }
+}
+
 int printPart(int part) {
      printf("lastStep %d %d\n",part+1,dd.part[part].lastStep?dd.part[part].lastStep:16);
      printf("mute %d \"%s\"\n",part+1,printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.part[part].mute));
@@ -362,6 +385,19 @@ int printPart(int part) {
      printf("\n");
      printRangeOfValues("gateTime",part+1,&dd.part[part].step[0].gateTime);
      printRangeOfValues("velocity",part+1,&dd.part[part].step[0].velocity);
+#ifdef PRINT_RESERVED
+     printPartReserved(part,&dd.part[part].reserved0,sizeof(dd.part[part].reserved0));
+     printPartReserved(part,&dd.part[part].reserved1,sizeof(dd.part[part].reserved1));
+     printPartReserved(part,&dd.part[part].reserved2,sizeof(dd.part[part].reserved2));
+     printPartReserved(part,&dd.part[part].reserved3[0],sizeof(dd.part[part].reserved3));
+     printPartReserved(part,&dd.part[part].reserved4[0],sizeof(dd.part[part].reserved4));
+     printPartReserved(part,&dd.part[part].reserved5,sizeof(dd.part[part].reserved5));
+     printPartReserved(part,&dd.part[part].reserved6[0],sizeof(dd.part[part].reserved6));
+     for(int step=0;step<64;step++){
+       printStepReserved(part,step,&dd.part[part].step[step].reserved[0],sizeof(dd.part[part].step[step].reserved));
+     }
+
+#endif
      printf("\n\n");
 
 }
@@ -411,6 +447,8 @@ int printPattern(char *line) {
    printf("MFXPadX %d\n",dd.masterFX.XYpadX);
    printf("MFXPadY %d\n",dd.masterFX.XYpadY);
    printf("MFXHold \"%s\"\n",printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.masterFX.MFXHold?1:0));
+   printf("chainTo %d\n",dd.chainTo);
+   printf("chainRepeat %d\n",dd.chainRepeat);
    printf("\n");
    for(int slot=0;slot<24;slot++) {
      printSlot(slot);
@@ -423,6 +461,24 @@ int printPattern(char *line) {
      }
      partRange = partRange>>1;
    }
+#ifdef PRINT_RESERVED
+     printf("pattern size %d\n",dd.size[0]+256*dd.size[1]+256*256*dd.size[2]+256*256*256*dd.size[3]);
+     printf("pattern version %hhd %hhd %hhd %hhd\n",dd.version[0],dd.version[1],dd.version[2],dd.version[3]);
+     printReserved("pattern reserved",&dd.reserved1[0],sizeof(dd.reserved1),0);
+     printReserved("pattern reserved",&dd.reserved2,sizeof(dd.reserved2),0);
+     printReserved("pattern reserved",&dd.reserved3[0],sizeof(dd.reserved3),0);
+     printReserved("pattern reserved",&dd.reserved4[0],sizeof(dd.reserved4),0);
+     printReserved("pattern reserved",&dd.reserved5[0],sizeof(dd.reserved5),0);
+     printReserved("pattern reserved",&dd.reserved6,sizeof(dd.reserved6),0);
+     printReserved("pattern reserved",&dd.reserved7[0],sizeof(dd.reserved7),0);
+     printReserved("pattern reserved",&dd.reserved8[0],sizeof(dd.reserved8),0);
+     printReserved("touchScale reserved",&dd.touchScale.reserved1[0],sizeof(dd.touchScale.reserved1),(unsigned char*)&dd.touchScale-&dd.header[0]);
+     printReserved("touchScale reserved",&dd.touchScale.reserved2,sizeof(dd.touchScale.reserved2),(unsigned char*)&dd.touchScale-&dd.header[0]);
+     printReserved("touchScale reserved",&dd.touchScale.reserved3[0],sizeof(dd.touchScale.reserved3),(unsigned char*)&dd.touchScale-&dd.header[0]);
+     printReserved("masterFX reserved",&dd.masterFX.reserved1,sizeof(dd.masterFX.reserved1),(unsigned char*)&dd.masterFX-&dd.header[0]);
+     printReserved("masterFX reserved",&dd.masterFX.reserved2,sizeof(dd.masterFX.reserved2),(unsigned char*)&dd.masterFX-&dd.header[0]);
+     printReserved("masterFX reserved",&dd.masterFX.reserved3[0],sizeof(dd.masterFX.reserved3),(unsigned char*)&dd.masterFX-&dd.header[0]);
+#endif
    return 1;
 }
 
@@ -827,6 +883,24 @@ int readLevel(char *line) {
 
   level=readInteger(line,&remain,0,127);
   dd.playlevel=127-level;
+  return 0;
+}
+
+int readChainTo(char *line) {
+  int cht;
+  char *remain;
+
+  cht=readInteger(line,&remain,0,250);
+  dd.chainTo=cht;
+  return 0;
+}
+
+int readChainRepeat(char *line) {
+  int chr;
+  char *remain;
+
+  chr=readInteger(line,&remain,0,64);
+  dd.chainRepeat=chr;
   return 0;
 }
 
@@ -1589,6 +1663,10 @@ int readLine(char *line) {
      return readPoke(remain);
   } else if(0==compare(command,"motion")) {
      return readMotionSequence(remain);
+  } else if(0==compare(command,"chainTo")) {
+     return readChainTo(remain);
+  } else if(0==compare(command,"chainRepeat")) {
+     return readChainRepeat(remain);
   } else if(command[0]=='#') { //comment
      return 0;
   } else {
