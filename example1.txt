@@ -22,20 +22,20 @@ gateTime 1 @15 80
 velocity 1 90
 velocity 1 @1,5,9,13 120
 
-#pattern for part 1 *=on x=off _=tie X=xxxx
-pattern 1   *_x* *x*x *x*x *x*x   X **** X 
+#triggers for part 1 *=on x=off _=tie (gateTime==127) X=xxxx
+triggers 1   *_x* *x*x *x*x *x*x   X **** X 
 #start at step 29
-pattern 1 @29 ****
-pattern 1 @33  *_x* X *x*x *x*x   X **** X 
+triggers 1 @29 ****
+triggers 1 @33  *_x* X *x*x *x*x   X **** X 
 
 #notes for part 1:
 #A5=A, octave 5. 
-#g is tied with A5 (see pattern above). g=G
+#g is tied with A5 (see triggers above). g=G
 #C^=C, one octave up. 
 #Cv=C, one octave down. 
 #D+= D sharp (- = flat)
-notes 1     A1 g B    C^ D   D+ Cv  B A    C^ d e f  c d e f
-notes 1 @33       C D   D+ Cv  B A    C^ d e f  c d 
+notes 1     A1 A1 . B    C^ . D .   D+ . Cv .   B . A .  . . . . C^ d e f  . . . . c d e f
+notes 1 @33       C C . D . . . .  D+ . Cv .  B . A .  . . . .  C^ d e f  . . . . 
 
 #transpose 1 @1-6 -3
 
@@ -44,11 +44,11 @@ notes 1 @33       C D   D+ Cv  B A    C^ d e f  c d
 gateTime 2-3 90
 velocity 2-3 80
 
-pattern 2-3 *___ X *___ X         X X ****  **** 
+triggers 2-3 *___ X *___ X         X X ****  **** 
 
 #d3af^, e3bg^ are chords
 # = repeat the previous note or chord
-notes 2-3 d3af^  = = =     e3bg^ = = =  
+notes 2-3 d3af^  = = =  . . . .    e3bg^ = = =    . . . .  . . . .   
 #@25 -> start inserting at step 25 
 # =*7 is equivalent to = = =   = = = =
 notes 2-3 @25 g4a^b =*7
@@ -57,10 +57,10 @@ transpose 2     1
 
 gateTime 4 90
 velocity 4 80
-pattern 4      ____ ____ ____ ____ 
-pattern 4  @17 ____ ____ ____ ____ 
-pattern 4  @33 ____ ____ ____ ____ 
-pattern 4  @49 ____ ____ ____ ____ 
+triggers 4      ____ ____ ____ ____ 
+triggers 4 @17 ____ ____ ____ ____ 
+triggers 4  @33 ____ ____ ____ ____ 
+triggers 4  @49 ____ ____ ____ ____ 
 
 notes 4       d2f^*16     e2g^*16
 notes 4 @33   d2f^  =*15     e2g^ =*15

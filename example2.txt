@@ -5,14 +5,14 @@ lastStep 1  16
 
 gateTime 1 70
 velocity 1 90
-pattern 1   ****         ****        *_xx   **xx      **xx  X  x*x* x**_
-notes 1     a1 = c^ av   c^ g = bv   a =    g =       a =      f f+ g g+ 
+triggers 1   ****         ****        *_xx   **xx      **xx  X  x*x* x**_
+notes 1     a1 = c^ av   c^ g = bv   a = . .    g =  . .      a = . .  . . . .   . f . f+  . g g+ = 
 
-pattern 9  X X X X  X X X x*x*x**x
-notes 9                   c4 = = = 
+triggers 9  X X X X  X X X x*x*x**x
+notes 9     . . . .  . . . . . . . . . . . .   . . . . . . . . . . .   . c4 . c4 . c4 . . c4 
 
-pattern 10 X x*x X *xxx  X   X x*x X *xxx  X
-notes 10     c4 =  c4          c4 =  c4
+triggers 10 X x*x X *xxx  X   X x*x X *xxx  X
+notes 10    . . . .  . c4 .    . . . .  . c4 . . .  . . . .  . . . .  . c4 .  . . . .     c4 . . .  . . . .
 
 mute 2-16 On
 mute 1 Off
@@ -26,8 +26,8 @@ wait 1
 mute 9 Off
 write
 wait 1 
-pattern 9  *xxx  xx**  xx**  xx**   X X X  x*x*x**x
-notes 9    c4      ==    ==  ==            = = = =
+triggers 9  *xxx  xx**  xx**  xx**   X X X  x*x*x**x
+notes 9    c4 . . .     . .  c4 c  . . c c   . . . .   . . . .   . . . .  . c . c . c .  . c
 mute 10 Off
 write
 
