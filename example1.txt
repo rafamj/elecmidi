@@ -1,7 +1,6 @@
 #selects pattern 1 (The pattern is only modified in memory. In order to save it permanently is necessary to pulse the "write" button)
 goto 1
 #reads the pattern from the electribe
-#it is advisable to do always a read at the beginning, to initialize the pattern
 read
 
 name Test
