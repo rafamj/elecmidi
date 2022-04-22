@@ -34,6 +34,10 @@ name Pattern1
 
 write
 
+to see all parameters:
+
+echo "print !" | ./elecmidi
+
 Command line arguments:
 
 -d device  
