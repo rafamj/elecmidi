@@ -3,12 +3,18 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
-#include <unistd.h>
+//#include <unistd.h>
 #include "tables.h"
 #include "elecmidi.h"
 
 //#define PRINT_RESERVED 
 //#define DELAY 5000
+#define SILENCE 'x'
+#define NOTE 'o'
+#define SILENCE4 'X'
+#define PROL '_'
+#define NONOTE '.'
+
 struct DataDumpType dd;
 struct DataDumpType auxData;
 
@@ -96,31 +102,35 @@ void sendCommand(unsigned char *command, long int cl, unsigned char *buffer, lon
 
 
 void jumpBlanks(char **line) {
-  while (**line!=0 && (**line==' ' || **line=='\t')){
+  while (**line!=0 && isspace(**line)){
     (*line)++;
   }
 }
 
 char *nextToken(char **line) {
+   if(!*line) return "";
   jumpBlanks(line);
-  return strtok_r(*line," ",line);
+  return strsep(line," "); //if no more token returns "" and line=0;
 }
 
 int readInteger(char **line, int min, int max){
   char *token;
   int n;
-  //token=strtok_r(line," ",remain);
-  token=nextToken(line);
+  jumpBlanks(line);
+  token=*line;
   if(!token) {
     printError("Error reading integer. Blank space or end of line found",lineBufferCopy);
   } 
   if(!isdigit(token[0]) && token[0]!='+' && token[0]!='-') {
     printError("Error reading integer. found ",token);
   }
-  n=atoi(token);
+  //n=atoi(token);
+  n=strtol(token,line,10);
   if(!(min==0 && max==0) && (n<min || n>max)) {
     printError("Error integer out of range ",token);
   }
+
+  jumpBlanks(line);
   return n;
 }
 
@@ -128,7 +138,6 @@ void readNumber(char **line, char *separator, int *intPart, int *decPart){
   char *token;
   char *ip, *dp;
   int n;
-  //token=strtok_r(line," ",remain);
   token=nextToken(line);
   if(!token) {
     printError("Error reading number. Blank space or end of line found",lineBufferCopy);
@@ -164,12 +173,10 @@ char* readString(char **line) {
     }
     **line=0;
     (*line)++;
-    //jumpBlanks(remain);
     return token;
 }
 
 int readTable(char **line, char *table[], int tableLen) {
-  //jumpBlanks(&line);
   if(isdigit(*line[0])) {
     int n=readInteger(line,1,tableLen);
     return n-1;
@@ -190,7 +197,6 @@ int readTable(char **line, char *table[], int tableLen) {
 }
 
 int readOnOffTable(char **line) {
-  //jumpBlanks(&line);
   if(isdigit(*line[0])) {
     return readInteger(line,0,1);
   } else {
@@ -210,13 +216,11 @@ long int readRange(char *line, int min, int max){
     while(token) {
       number1=strtok_r(token,"-",&token);
       number2=token;
-      //n1=atoi(number1);
       n1=readInteger(&number1,min,max);
 
       if(number2[0]==0) {
         n2=n1;
       } else {
-        //n2=atoi(number2);
         n2=readInteger(&number2,min,max);
       }
       for(int i=n1;i<=n2;i++) {
@@ -231,10 +235,8 @@ int readPart(char **line){
   char *token;
   long int range;
 
-  //token=strtok_r(line," ",remain);
   token=nextToken(line);
   range=readRange(token,1,16);
-  //jumpBlanks(remain);
   return range & 0xffff;
 }
 
@@ -244,7 +246,7 @@ char *note2string(int noteNumber,char *buffer) {
   char sharp;
  
   if(noteNumber==0) {
-    buffer[0]='.';
+    buffer[0]=NONOTE;
     buffer[1]=0;
   } else {
     noteNumber--;
@@ -374,12 +376,12 @@ int printPart(int part) {
        if(s%16==0) printf("  ");
        if (dd.part[part].step[s].onOff==1) {
          if(s>0 && dd.part[part].step[s-1].gateTime>=127) {
-           printf("_");
+           printf("%c",PROL);
 	 } else {
-           printf("*");
+           printf("%c",NOTE);
 	 }
        } else {
-         printf("x");
+         printf("%c",SILENCE);
        }
      }
      printf("\n");
@@ -387,18 +389,33 @@ int printPart(int part) {
      //printf("notes %d     ",part+1);
      for(int s=0; s<64; s++) {
        char buffer[4];
-       int l=0;
 
        if(s%16==0)       printf("\nnotes %d @%d ", part+1,s+1);
        else if(s%4==0)  printf("  ");
-       for(int n=0;n-4;n++) {
-         printf("%s",note2string(dd.part[part].step[s].note[n],buffer));
-	 l+=strlen(buffer);
+       /*
+       for(int n=0;n<4;n++) {
+         //printf("%s %d",note2string(dd.part[part].step[s].note[n],buffer),dd.part[part].step[s].note[n]);
+         printf("%d",dd.part[part].step[s].note[n]);
        }
-       if(l>0) {
-         //for(int i=l;i<12;i++) printf(" ");
-	 printf(" ");
+       printf(" ");
+       */
+       
+       if(dd.part[part].step[s].note[0]==0 && dd.part[part].step[s].note[1]==0 && dd.part[part].step[s].note[2]==0 && dd.part[part].step[s].note[3]==0) {
+         printf("%c   ",NONOTE);
+       } else {
+          printf("%s",note2string(dd.part[part].step[s].note[0],buffer));
+          if(!(dd.part[part].step[s].note[1]==0 && dd.part[part].step[s].note[2]==0 && dd.part[part].step[s].note[3]==0)) {
+            printf("%s",note2string(dd.part[part].step[s].note[1],buffer));
+            if(!(dd.part[part].step[s].note[2]==0 && dd.part[part].step[s].note[3]==0)) {
+                printf("%s",note2string(dd.part[part].step[s].note[2],buffer));
+                if(!dd.part[part].step[s].note[3]==0) {
+                  printf("%s",note2string(dd.part[part].step[s].note[3],buffer));
+		} else printf(" ");
+	    } else printf(" ");
+	 } else printf(" ");
        }
+       printf(" ");
+     
      }
      printf("\n");
      printRangeOfValues("gateTime",part+1,&dd.part[part].step[0].gateTime);
@@ -439,13 +456,11 @@ void printSlot(int slot) {
 int printPattern(char *line) {
    int partRange;
    char *token;
-   char *remain;
    int all=0;
 
     //token=strtok_r(line," ",&remain); ///?????
   token=nextToken(&line);
-  remain=line;
-    if(token==0) {
+    if(*token==0) {
       all=1;
       partRange=0xffff;
     } else {
@@ -675,14 +690,14 @@ char *p=s;
 }
 
 
-int readStep0(char *line, char **remain){
+int readStep0(char **line){
   char *token;
   int step0;
   
-  if(*remain[0]=='@') {
+  if(*line[0]=='@') {
   //  token=strtok_r(*remain," ",remain);
-  token=nextToken(&line);
-  *remain=line;
+  token=nextToken(line);
+  //*remain=line;
     //step0=atoi(token+1);
     token++;
     step0=readInteger(&token,1,64);
@@ -697,7 +712,7 @@ int readStep0(char *line, char **remain){
 int note2midi(char note, int octave, int alt) {
   int n;
   
-  if(note=='.') return 0;
+  if(note==NONOTE) return 0;
   if(note>'B') octave--;
   n=(note-'A')*2;
   if(note>='C') n--;
@@ -726,7 +741,7 @@ int readStepNotes(char *notes,int part,int step){
        }
        break;
     }
-    if((note<'A' || note>'G') && note!='.') {
+    if((note<'A' || note>'G') && note!=NONOTE) {
       printError("Error reading note",notes);
       return -1;
     }
@@ -775,51 +790,99 @@ int readStepNotes(char *notes,int part,int step){
   return step;
 }
 
-int readRepeat(char **s) {
-  char *remain;
+int readExpression(char *expr, char **buff,int len) {
+   char *buffer=*buff;
+   char *start=buffer;
+   char *end=buffer;
 
-  *s=strtok_r(*s,"*",&remain);
-  if(remain[0]==0) {
-    return 1;
-  } else {
-    return readInteger(&remain,0,0);
-  }
+
+   while(expr && *expr) { //readInteger can make expr null
+     if(*expr=='(') {    // '('
+       //find matching right parenthesis
+       int n=1;
+       char *rightp =expr;
+       expr++; //after the parenthesis
+       *buffer++=' ';
+       start=buffer;
+       while(*rightp && n>0) {
+         rightp++;
+         if(*rightp=='(') n++;
+         if(*rightp==')') n--;
+       }
+       if(n!=0) {
+         printError("Unclosed parenthesis","");
+       }
+       *rightp=0;
+       len=readExpression(expr,&buffer,len);
+       expr=rightp+1;
+       end=buffer;
+     } else if (*expr==')') {
+       printError("Too many right parenthesis","");
+     } else if (*expr=='*') {     //   '*'
+       *buffer++=' '; //
+       end=buffer;
+       expr++;
+       int n=readInteger(&expr,0,0);
+       if(n<=0) {
+         printError("Integer must be positive","");
+       }
+       n--;
+       while(n--) {
+         for(char *p=start;p<end;p++) {
+	   len--;
+	   if(!len) {
+             printError("expresion too long","");
+	   }
+	   *buffer++=*p;
+	 }
+       }
+       start=buffer-1;
+     } else {   //all other characters
+       len--;
+       if(len<2) {
+         printError("expresion too long","");
+       }
+       //printf("char %c %c %d %d %d\n",*expr,*(expr-1),*(expr-1),*(expr-1)==0,isalnum(*expr));
+       if((isalnum(*expr)||*expr=='+'||*expr=='.') && (isblank(*(expr-1))||*(expr-1)==0)) { //*(expr-1)==0 former ')'
+         //printf("start3\n");
+         start=buffer;
+       }
+       *buffer++=*expr++;
+     }
+   }
+   *buffer=0;
+   *buff=buffer;
+   return len;
 }
 
 int readNotes(char *line) {
   char *token;
-  char *remain;
   int partRange;
   int step0=1;
   int step[16];
-  int repeat=1;
-  
+  char buffer[MAX_LINE*2]; //just in case
+  char *buff=buffer;
+
   partRange=readPart(&line);
-  remain=line;
   if(partRange==-1) {
     return -1;
   }
-  //jumpBlanks(&remain);
-  line=remain;
-
-  step0=readStep0(remain,&remain);
-  line=remain;
+  step0=readStep0(&line);
   if(step0==-1) {
     return -2;
   }
 
-  //token=strtok_r(remain," ",&remain);
+  readExpression(line,&buff,sizeof(buffer));
+  //printf("expresion final %s\n",buffer);
+  line=buffer;
   token=nextToken(&line);
-  remain=line;
-  if(token==0) return 0;
-  repeat=readRepeat(&token);
+  if(*token==0) return 0;
   for(int i=0;i<16;i++) { 
     step[i]=step0-1;
   }
   int ok=1;
   int origPartRange=partRange;
-  while(token!=NULL && ok) {
-    while(repeat--) {
+  while(*token!=0 && ok) {
       partRange=origPartRange;
       for(int part=0; part<16; part++) {
         if(partRange&1) {
@@ -831,20 +894,19 @@ int readNotes(char *line) {
             printError("Error in notes ",line);
             return -4;
           }
+	  /*
+  for (int i=0;i<64;i++) {
+    for(int n=0;n<4;n++) {
+  printf("%d ",dd.part[part].step[i].note[n]);
+
+  }
+  }
+  printf("\n");
+  */
         }
         partRange=partRange>>1;	
       }
-    }
-    char *ant=token;
-  //  token=strtok_r(remain," ",&remain);
   token=nextToken(&line);
-  remain=line;
-    if(token) {
-      repeat=readRepeat(&token);
-      if(token[0]=='=') {
-        token=ant;
-      }
-    }
   }
   return 0;
 }
@@ -909,7 +971,6 @@ int readLength(char *line) {
 
 int readBeat(char *line) {
   int beat;
-  //char *remain;
   beat=readTable(&line,beatTable,sizeof(beatTable)/sizeof(beatTable[0]));
   dd.beat=beat;
   return 0;
@@ -917,7 +978,6 @@ int readBeat(char *line) {
 
 int readKey(char *line) {
   int key;
-  //char *remain;
 
   key=readTable(&line,keyTable,sizeof(keyTable)/sizeof(keyTable[0]));
   dd.key=key;
@@ -926,7 +986,6 @@ int readKey(char *line) {
 
 int readScale(char *line) {
   int scale;
-  //char *remain;
 
   scale=readTable(&line,scaleTable,sizeof(scaleTable)/sizeof(scaleTable[0]));
   dd.scale=scale;
@@ -1008,7 +1067,6 @@ int readGateArpTime(char *line) {
 
 int readMFXType(char *line) {
   int t;
-  //char *remain;
 
   t=readTable(&line,MFXTypeTable,sizeof(MFXTypeTable)/sizeof(MFXTypeTable[0]));
   dd.masterFX.type=t;
@@ -1036,9 +1094,7 @@ int readMFXHold(char *line) {
   char **remain;
   char *token;
 
-  //jumpBlanks(&line);
   if(isdigit(line[0])) {
-  //  token=strtok_r(line," ",remain);
   token=nextToken(&line);
   *remain=line;
     int h=atoi(token);
@@ -1053,7 +1109,6 @@ int readMFXHold(char *line) {
     }
     *line++=0;
     remain=&line;
-    //jumpBlanks(remain);
     if(strcmp(token,"On")==0) {
       h=1;
     } else if(strcmp(token,"Off")==0) {
@@ -1080,11 +1135,8 @@ void putValueInRange(int partRange, unsigned char *p,unsigned char value) {
 int readLastStep(char *line) {
   int partRange;
   int lst;
-  //char *remain;
-  //char *token;
 
   partRange=readPart(&line);
-  //remain=line;
   lst=readInteger(&line,1,16);
   putValueInRange(partRange,&dd.part[0].lastStep,lst%16);
   return 0;
@@ -1093,11 +1145,8 @@ int readLastStep(char *line) {
 int readIntegerPart(char *line, int min, int max, unsigned char *p) {
   int partRange;
   int n;
-  //char *remain;
-  //char *token;
 
   partRange=readPart(&line);
-  //remain=line;
   n=readInteger(&line,min,max);
   putValueInRange(partRange,p,n);
   return 0;
@@ -1106,11 +1155,8 @@ int readIntegerPart(char *line, int min, int max, unsigned char *p) {
 int readOnOffPart(char *line,unsigned char *p) {
   int partRange;
   int value;
-  //char *remain;
-  //char *token;
 
   partRange=readPart(&line);
-  //remain=line;
   value=readOnOffTable(&line);
   putValueInRange(partRange,p,value);
   return 0;
@@ -1119,11 +1165,9 @@ int readOnOffPart(char *line,unsigned char *p) {
 int readTablePart(char *line, char *table[], int size, unsigned char *p) {
   int partRange;
   int va;
-  //char *remain;
   char *token;
 
   partRange=readPart(&line);
-  //remain=line;
   va=readTable(&line,table,size);
   putValueInRange(partRange,p,va);
   return 0;
@@ -1133,19 +1177,14 @@ int readGateTime(char *line) {
   int partRange;
   int gt;
   long int stepRange=0xFFFFFFFFFFFFFFFF;
-  //char *remain;
   char *token;
 
   partRange=readPart(&line);
-  //remain=line;
   if(partRange==-1) {////
     return -1;
   }
-  //jumpBlanks(&remain);
-  //token=strtok_r(remain," ",&remain);
   token=nextToken(&line);
-  //remain=line;
-  if(line[0]==0) { //last number
+  if(line==0) { //last number
     line=token;
   } else if(token[0]=='@') {
     stepRange=readRange(token+1,1,64);
@@ -1178,20 +1217,14 @@ int readVelocity(char *line) {
   int partRange;
   int v;
   long int stepRange=0xFFFFFFFFFFFFFFFF;
-  //char *remain;
   char *token;
 
-  //token=strtok_r(line," ",&remain);
   partRange=readPart(&line);
-  //remain=line;
   if(partRange==-1) {////
     return -1;
   }
-  //jumpBlanks(&remain);
-  //token=strtok_r(remain," ",&remain);
   token=nextToken(&line);
-  //remain=line;
-  if(line[0]==0) { //last number
+  if(!line) { //last number
     line=token;
   } else if(token[0]=='@') {
     stepRange=readRange(token+1,1,64);
@@ -1210,10 +1243,8 @@ int readVelocity(char *line) {
         if(stepRange & (1L<<step)) {
           dd.part[part].step[step].velocity=v;
         }
-        //stepRange=stepRange>>1;
       }
     }
-    //partRange=partRange>>1;
   }
   return 0;
 }
@@ -1222,20 +1253,14 @@ int readTranspose(char *line) {
   int partRange;
   int tr;
   long int stepRange=0xFFFFFFFFFFFFFFFF;
-  //char *remain;
   char *token;
 
-  //token=strtok_r(line," ",&remain);
   partRange=readPart(&line);
-  //remain=line;
   if(partRange==-1) {
     return -1;
   }
-  //jumpBlanks(&remain);
-  //token=strtok_r(remain," ",&remain);
   token=nextToken(&line);
-  //remain=line;
-  if(line[0]==0) { //last number
+  if(line==0) { //last number
     line=token;
   } else if (token[0]=='@'){
     stepRange=readRange(token+1,1,64);
@@ -1269,16 +1294,18 @@ int readTranspose(char *line) {
 }
 //silence 'x'
 //4 silences 'X'
-//note '*'
+//note 'o'
 //prol '_'
 //no note '.'
 
 void putSilence(int part, int step) {
   dd.part[part].step[step].onOff=0;
+  /*
   dd.part[part].step[step].note[0]=0;
   dd.part[part].step[step].note[1]=0;
   dd.part[part].step[step].note[2]=0;
   dd.part[part].step[step].note[3]=0;
+  */
   if(dd.part[part].step[step].gateTime>96) {
 	   dd.part[part].step[step].gateTime=96;
   }
@@ -1293,14 +1320,14 @@ void putTie(int part, int step) {
 
 int putSymbolInPattern(int part, int step, char symbol) {
     switch(symbol) {
-      case 'x': putSilence(part,step++);break;
-      case 'X': putSilence(part,step++);
+      case SILENCE: putSilence(part,step++);break;
+      case SILENCE4: putSilence(part,step++);
                 if(step<64) putSilence(part,step++);
                 if(step<64) putSilence(part,step++);
                 if(step<64) putSilence(part,step++);
                 break;
-      case '*': dd.part[part].step[step++].onOff=1 ;break;
-      case '_': putTie(part,(step)%64);step++;break;
+      case NOTE: dd.part[part].step[step++].onOff=1 ;break;
+      case PROL: putTie(part,(step)%64);step++;break;
       case   0: step=64; break;
     }
     return step;
@@ -1308,27 +1335,28 @@ int putSymbolInPattern(int part, int step, char symbol) {
 
 int readTriggers(char *line) {
   char *token;
-  char *remain;
   int partRange;
   int step0=1;
   int step;
+  char buffer[MAX_LINE*2]; //just in case
+  char *buff=buffer;
 
   partRange=readPart(&line);
-  remain=line;
   if(partRange==-1) {
     return -1;
   }
-  //jumpBlanks(&remain);
-  step0=readStep0(remain,&remain);
+  step0=readStep0(&line);
   if(step0==-1) {
     return -2;
   }
-  deleteSpaces(remain);
+  readExpression(line,&buff,sizeof(buffer));
+  line=buffer;
+  deleteSpaces(line);
   for(int part=0;part<16;part++) {
     if(partRange&1) {
       step=step0-1;
-      for(int i=0;i<strlen(remain);i++) {
-        step=putSymbolInPattern(part, step, remain[i]);
+      for(int i=0;i<strlen(line);i++) {
+        step=putSymbolInPattern(part, step, line[i]);
       } 
       if(step>=64) {
         break;
@@ -1354,7 +1382,6 @@ int stop(char *line) {
 
 void waitClock(int n) {
   unsigned char c;
-
   openMidi("r");
   while(n) {
     c=readMidiChar();
@@ -1426,7 +1453,6 @@ int readCopy(char *line) {
     printError("Error in part source","");
     return -1;
   }
-  //token=strtok_r(line," ",&line);
   token=nextToken(&line);
   if(strcmp(token,"to")!=0) {
     printError("'to' expected. Found ",token);
@@ -1444,7 +1470,6 @@ int readCopy(char *line) {
 }
 
 int readXchgPart(char *line) {
-  //char **remain;
   unsigned char *base=&dd.part[0].lastStep;
   unsigned char buffer;
 
@@ -1460,15 +1485,12 @@ int readXchgPart(char *line) {
 int oscType(char *line) {
   int partRange;
   int osct;
-  //char *remain;
   char *token;
 
   partRange=readPart(&line);
-  //remain=line;
   if(partRange==-1) {
     return -1;
   }
-  //osct=readInteger(remain,&remain);
   osct=readTable(&line,oscTypeTable,sizeof(oscTypeTable)/sizeof(oscTypeTable[0]));
   for(int part=0;part<16;part++) {
     if(partRange & 1) {
@@ -1490,23 +1512,19 @@ void printValue(char *format0,char *format,int addr,int part,int offset) {
 }
 
 int readPeek(char *line) {
-  //char *remain=line;
   int part=0;
   int addr;
   char type='u';
   int n=1;
 
-  //jumpBlanks(&remain);
   if(line[0]=='p') {
     line++;
     part=readInteger(&line,1,16);
   }
   addr=readInteger(&line,0,0);
-  //jumpBlanks(&remain);
   if(line[0]) {
     type=line[0];
     line++;
-    //jumpBlanks(&remain);
     if(line[0]) {
       n=readInteger(&line,0,0);
     }
@@ -1528,7 +1546,6 @@ int readPeek(char *line) {
 }
 
 int readPoke(char *line) {
-  //char *remain=line;
   int addr;
   int part=0;
   int value;
@@ -1536,13 +1553,11 @@ int readPoke(char *line) {
   int n=1;
 
 
-  //jumpBlanks(&remain);
   if(line[0]=='p') {
     line++;
     part=readInteger(&line,1,16);
   }
   addr=readInteger(&line,0,0);
-  //jumpBlanks(&remain);
   if(!isdigit(line[0])) {
     type=line[0];
     line++;
@@ -1551,11 +1566,8 @@ int readPoke(char *line) {
     }
   }
   for(int i=0;i<n;i++) {
-    //jumpBlanks(&remain);
     if(type=='c') {
-  //    value=strtok_r(remain," ",&remain)[0];
   value=nextToken(&line)[0];
-  //remain=line;
     } else {
       value=readInteger(&line,0,0);
     }
@@ -1582,16 +1594,17 @@ int readMotionSequence(char *line) {
   int destination;
   int i=0;
   int lpart,rpart;
+  char *token;
 
   slot=readInteger(&line,0,23);
   part=readInteger(&line,1,16);
   destination=readTable(&line,destinationTable,sizeof(destinationTable)/sizeof(destinationTable[0]));
   dd.motionSequence.part[slot]=part;
   dd.motionSequence.destination[slot]=destination;
-  jumpBlanks(&line);
-  while(isdigit(line[0])) {
+  token=nextToken(&line);
+  while(token[0] && isdigit(token[0])) {
     unsigned char s;
-    readNumber(&line,":",&lpart,&rpart);
+    readNumber(&token,":",&lpart,&rpart);
     if(rpart==-1) { 
       s=lpart;
       dd.motionSequence.motion[slot][i++]=s;
@@ -1607,9 +1620,8 @@ int readMotionSequence(char *line) {
         dd.motionSequence.motion[slot][i]=s;
       }
     }
-    jumpBlanks(&line);
+    token=nextToken(&line);
   }
-  
   return 0;
 }
 
@@ -1621,7 +1633,7 @@ int readLine(char *line) {
   char *command;
 
   command=nextToken(&line);
-  if(!command) return 0; //blank line
+  if(strlen(command)==0) return 0; //blank line
   if(0==compare(command,"name")) {
      return readName(line);
   } else if(0==compare(command,"tempo")) {

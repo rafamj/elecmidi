@@ -21,11 +21,13 @@ gateTime 1 @15 80
 velocity 1 90
 velocity 1 @1,5,9,13 120
 
-#triggers for part 1 *=on x=off _=tie (gateTime==127) X=xxxx
-triggers 1   *_x* *x*x *x*x *x*x   X **** X 
+#triggers for part 1 o=on x=off _=tie (gateTime==127) X=xxxx
+triggers 1   o_xo oxox oxox oxox   X oooo X  oooo
 #start at step 29
-triggers 1 @29 ****
-triggers 1 @33  *_x* X *x*x *x*x   X **** X 
+#it is possible to multiply: oooo * 2  == oooo oooo
+triggers 1 @29 oooo * 2
+# ((xo_xo  *2) xoxo ) *2   == xo_xo xo_xo xoxo xo_xo xo_xo xoxo
+triggers 1 @33  ((xo_xo  *2) xoxo ) *2 o * 8 
 
 #notes for part 1:
 #A5=A, octave 5. 
@@ -34,7 +36,7 @@ triggers 1 @33  *_x* X *x*x *x*x   X **** X
 #Cv=C, one octave down. 
 #D+= D sharp (- = flat)
 notes 1     A1 A1 . B    C^ . D .   D+ . Cv .   B . A .  . . . . C^ d e f  . . . . c d e f
-notes 1 @33       C C . D . . . .  D+ . Cv .  B . A .  . . . .  C^ d e f  . . . . 
+notes 1 @33      (((. C4 C . D) * 2) (. D+ . Cv) *2) *2  ( B A C^ d ) *8 
 
 #transpose 1 @1-6 -3
 
@@ -43,14 +45,14 @@ notes 1 @33       C C . D . . . .  D+ . Cv .  B . A .  . . . .  C^ d e f  . . . 
 gateTime 2-3 90
 velocity 2-3 80
 
-triggers 2-3 *___ X *___ X         X X ****  **** 
+triggers 2-3 o___ X o___ X         X X oooo  oooo 
 
-#d3af^, e3bg^ are chords
-# = repeat the previous note or chord
-notes 2-3 d3af^  = = =  . . . .    e3bg^ = = =    . . . .  . . . .   
+#d3af^, e3bg^ are chords ; it is also possible a.b (the second note is 0)
+# notes can also be multiplied 
+notes 2-3 d3af^  * 3  . . . .    e3bg^   * 3   . . . .  . . . .   
 #@25 -> start inserting at step 25 
-# =*7 is equivalent to = = =   = = = =
-notes 2-3 @25 g4a^b =*7
+# =o7 is equivalent to = = =   = = = =
+notes 2-3 @25 g4a^b *7
 
 transpose 2     1
 
@@ -61,8 +63,8 @@ triggers 4 @17 ____ ____ ____ ____
 triggers 4  @33 ____ ____ ____ ____ 
 triggers 4  @49 ____ ____ ____ ____ 
 
-notes 4       d2f^*16     e2g^*16
-notes 4 @33   d2f^  =*15     e2g^ =*15
+notes 4       d2f^ *16     e2g^ *16
+notes 4 @33   d2f^  *15     e2g^ *15
 #prints the data to stdout
 #prints parts 1-4:
 #print 1-4
@@ -84,7 +86,8 @@ peek p3 0 u10
 #motion sequence. parameters slot (0-23) part(1-16) destination(0-19) sequence (64 values from 0 to 127))
 #the values can have the form <position>:<value>
 #for example the following line changes the pan continously from 0 at position 0 to 127 at position 30, in positions 31 and 32 puts the value 127 and from positions 33 to 64 goes back to 0
-motion 0 1 11       0:0 30:127 127 127 63:0
+#Can write 12 instead of "Amp Pan" 
+motion 0 1 "Amp Pan"       0:0 30:127 127 127 63:0
 
 #writes back the modified pattern into the electribe
 write
@@ -109,7 +112,7 @@ wait 0.15
 mute 2 Off
 write
 
-#waits 1 cycle (length * last step of part 0)
+#waits 1 cycle (length o last step of part 0)
 wait 1 
 mute 3 Off
 #transpose 1-4 6
