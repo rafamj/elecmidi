@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
-//#include <unistd.h>
+#include <unistd.h>
 #include "tables.h"
 #include "elecmidi.h"
 
@@ -91,7 +91,7 @@ void sendCommand(unsigned char *command, long int cl, unsigned char *buffer, lon
    openMidi("r");
    int tries=0;
    buffer[0]=readMidiChar();
-   while(buffer[0]!=0xf0 && tries++ < 10) { //wait for the sys ex message
+   while(buffer[0]!=0xf0 && tries++ < 2) { //wait for the sys ex message
      buffer[0]=readMidiChar();
    }
    if(buffer[0]==0xf0){
@@ -102,6 +102,7 @@ void sendCommand(unsigned char *command, long int cl, unsigned char *buffer, lon
 
 
 void jumpBlanks(char **line) {
+  if(!*line) return;
   while (**line!=0 && isspace(**line)){
     (*line)++;
   }
@@ -160,6 +161,7 @@ char* readString(char **line) {
 
 
     jumpBlanks(line);
+    if(*line==0) return 0;
     if(*line[0]=='"' || *line[0]=='\'') {
       stringEnd=*line[0];
       (*line)++;
@@ -177,6 +179,9 @@ char* readString(char **line) {
 }
 
 int readTable(char **line, char *table[], int tableLen) {
+  if(!*line || *line[0]==0) {
+    printError("Error reading value.","End of line found");
+  }
   if(isdigit(*line[0])) {
     int n=readInteger(line,1,tableLen);
     return n-1;
@@ -197,6 +202,9 @@ int readTable(char **line, char *table[], int tableLen) {
 }
 
 int readOnOffTable(char **line) {
+  if(!*line) {
+    printError("Error reading On Off value.","End of line found");
+  }
   if(isdigit(*line[0])) {
     return readInteger(line,0,1);
   } else {
@@ -236,6 +244,7 @@ int readPart(char **line){
   long int range;
 
   token=nextToken(line);
+  if(*token==0) return -1;
   range=readRange(token,1,16);
   return range & 0xffff;
 }
@@ -526,10 +535,10 @@ int printPattern(char *line) {
 }
 
 int checkData(struct DataDumpType *dd){
-    if(dd->header[0]!=0x50) {
+    if(dd->header[0]!=80 || dd->header[1]!=84 || dd->header[2]!=83 || dd->header[3]!=84 ) {
       return -1;
     }
-    if(dd->footer[0]!=0x50) {
+    if(dd->footer[0]!=80 || dd->footer[1]!=84 ||dd->footer[2]!=69 ||dd->footer[3]!=68) {
       return -2;
     }
 
@@ -621,27 +630,36 @@ struct currentPattern {
 		   unsigned char eox;
 		  } *input=(struct currentPattern *)ioBuffer;
 
-int ok=0;
-int tries=0;
-while(!ok && tries++ <3) {
-sendCommand(data,sizeof(data),(char *)input, sizeof(*input));
-int res=decodeData(input->buffer,&dd);
-ok=(res==0);
+  int ok=0;
+  int tries=0;
+  while(!ok && tries++ <3) {
+    sendCommand(data,sizeof(data),(char *)input, sizeof(*input));
+    if(input->header[6]==0x40) {
+      int res=decodeData(input->buffer,&dd);
+      ok=(res==0);
+    } else {
+       sleep(1);
+    }
 /*
-if(input->header[6]==0x24) {
-printf("NACK received\n");
-} else if(input->header[6]==0) {
-printf("null data received\n");
-} else {
-int res=decodeData(input->buffer,&dd);
-ok=(res==0);
-}
-*/
-}
-if(!ok) {
-printf("error receiving data\n");
-exit(1);
-}
+
+    if(input->header[6]==0x24) {
+      printf("NACK received\n");
+    } else if(input->header[6]==0) {
+      printf("null data received\n");
+       sleep(1);
+       printf("p1\n");
+    } else {
+      printf("%x received\n",input->header[6]);
+      int res=decodeData(input->buffer,&dd);
+      ok=(res==0);
+    }
+
+  */
+  }    
+  if(!ok) {
+    printf("error receiving data %x\n",input->header[6]);
+    exit(1);
+  }
 }
 
 void currentPatternDataSend() {
@@ -666,15 +684,30 @@ output->EOX=0xF7;
 l=encodeData(&dd,output->buffer);
 l+=8; //header + EOX
 while(!ok && tries++ <5) {
-sendCommand(ioBuffer,l,data,sizeof(data));
-if(data[6]==0x24) {
-printf("NACK received\n");
-} else if(data[6]==0x23){
-ok=1;
-} else {
-printf("error sending data %x\n",data[6]);
-     }
-   }
+  sendCommand(ioBuffer,l,data,sizeof(data));
+  if(data[6]==0x23){ 
+    ok=1;
+  } else {
+    sleep(1);
+  }
+  /*
+  if(data[6]==0x24) {
+    printf("NACK received\n");
+  } else if(data[6]==0x23){
+    ok=1;
+  } else if(data[6]==0x26) {
+    printf("data format error\n");
+  } else {
+    printf("error sending data %x\n",data[6]);
+  }
+  */
+}
+  if(!ok) {
+    printf("error sending data %x\n",data[6]);
+    if(data[6]==0x26) {
+      printf("data format error\n");
+    }
+  }
 }
 
 void deleteSpaces(char *s){
@@ -692,20 +725,14 @@ char *p=s;
 
 int readStep0(char **line){
   char *token;
-  int step0;
-  
-  if(*line[0]=='@') {
-  //  token=strtok_r(*remain," ",remain);
-  token=nextToken(line);
-  //*remain=line;
-    //step0=atoi(token+1);
+ 
+  if(*line && *line[0]=='@') {
+    token=nextToken(line);
     token++;
-    step0=readInteger(&token,1,64);
+    return readInteger(&token,1,64);
   } else {
     return 1;
   }
-  return step0;
-
 }
 
 
@@ -720,7 +747,42 @@ int note2midi(char note, int octave, int alt) {
   return 21 + n + alt + octave * 12;
 }
 
-int readStepNotes(char *notes,int part,int step){
+//silence 'x'
+//4 silences 'X'
+//note 'o'
+//prol '_'
+//no note '.'
+
+void putSilence(int part, int step) {
+  dd.part[part].step[step].onOff=0;
+  if(dd.part[part].step[step].gateTime>96) {
+	   dd.part[part].step[step].gateTime=96;
+  }
+}
+
+void putTie(int part, int step) {
+  step=(step-1)%64;
+  dd.part[part].step[step].gateTime=127;
+  step=(step+1)%64;
+  dd.part[part].step[step].onOff=1;
+}
+
+int putSymbolInPattern(int part, int step, char symbol) {
+    switch(symbol) {
+      case SILENCE: putSilence(part,step++);break;
+      case SILENCE4: putSilence(part,step++);
+                if(step<64) putSilence(part,step++);
+                if(step<64) putSilence(part,step++);
+                if(step<64) putSilence(part,step++);
+                break;
+      case NOTE: dd.part[part].step[step++].onOff=1 ;break;
+      case PROL: putTie(part,(step)%64);step++;break;
+      case   0: step=64; break;
+    }
+    return step;
+}
+
+int readStepNotes(char *notes,int part,int step, int trig){
   int n=0;
   int note;
   int alt;
@@ -728,14 +790,7 @@ int readStepNotes(char *notes,int part,int step){
   while(n<4) {
     alt=0;
     note=toupper(*notes);
-    /*
-    if(note=='.') {
-      notes++;
-      n++;
-      continue;
-    } 
-    */
-    if(note==0)  { //end of string. The remainder notes are put to 0
+    if(note==0 || (trig &&note==PROL))  { //end of string. The remainder notes are put to 0
        while(n<4) {
          dd.part[part].step[step].note[n++]=0;
        }
@@ -743,7 +798,6 @@ int readStepNotes(char *notes,int part,int step){
     }
     if((note<'A' || note>'G') && note!=NONOTE) {
       printError("Error reading note",notes);
-      return -1;
     }
     c=*++notes;
     if(isdigit(c)) {
@@ -755,7 +809,6 @@ int readStepNotes(char *notes,int part,int step){
         c=*notes++;
       } else {
         printError("Error octave too low",notes);
-        return -1;
       }
     } else if(c=='^') {
       if(octave<9) {
@@ -763,7 +816,6 @@ int readStepNotes(char *notes,int part,int step){
         c=*notes++;
       } else {
         printError("Error octave too high",notes);
-        return -1;
       }
     }
     if(c=='+') alt=1; 
@@ -774,19 +826,28 @@ int readStepNotes(char *notes,int part,int step){
       midiNote++; //// why??
     if(midiNote>127) {
         printError("Error note too high",notes);
-        return -1;
     }
-    /*
-    while(dd.part[part].step[step].onOff==0 && step<64) {
-      step++; //search first non silence note
-    }
-    */
     if(step<64) {
         dd.part[part].step[step].note[n]=midiNote;
     }
     n++;
   }
-  step++;
+  if(trig) {
+    dd.part[part].step[step].onOff=0;
+    for(int n=0; n<4;n++) {
+      if(dd.part[part].step[step].note[n]!=0) dd.part[part].step[step].onOff=1;
+    }
+  }
+  if(*notes==PROL && trig) {
+      step++;
+      while(*notes==PROL) {
+        for(int n=0;n<4;n++) dd.part[part].step[step].note[n]=dd.part[part].step[step-1].note[n];
+        step=putSymbolInPattern(part,step,PROL);
+        notes++;
+      }
+  } else {
+    step++;
+  }
   return step;
 }
 
@@ -794,7 +855,6 @@ int readExpression(char *expr, char **buff,int len) {
    char *buffer=*buff;
    char *start=buffer;
    char *end=buffer;
-
 
    while(expr && *expr) { //readInteger can make expr null
      if(*expr=='(') {    // '('
@@ -842,9 +902,7 @@ int readExpression(char *expr, char **buff,int len) {
        if(len<2) {
          printError("expresion too long","");
        }
-       //printf("char %c %c %d %d %d\n",*expr,*(expr-1),*(expr-1),*(expr-1)==0,isalnum(*expr));
        if((isalnum(*expr)||*expr=='+'||*expr=='.') && (isblank(*(expr-1))||*(expr-1)==0)) { //*(expr-1)==0 former ')'
-         //printf("start3\n");
          start=buffer;
        }
        *buffer++=*expr++;
@@ -855,7 +913,41 @@ int readExpression(char *expr, char **buff,int len) {
    return len;
 }
 
-int readNotes(char *line) {
+int readTriggers(char *line) {
+  char *token;
+  int partRange;
+  int step0=1;
+  int step;
+  char buffer[MAX_LINE*2]; //just in case
+  char *buff=buffer;
+
+  partRange=readPart(&line);
+  if(partRange==-1) {
+    return -1;
+  }
+  step0=readStep0(&line);
+  if(step0==-1) {
+    return -2;
+  }
+  readExpression(line,&buff,sizeof(buffer));
+  line=buffer;
+  deleteSpaces(line);
+  for(int part=0;part<16;part++) {
+    if(partRange&1) {
+      step=step0-1;
+      for(int i=0;i<strlen(line);i++) {
+        step=putSymbolInPattern(part, step, line[i]);
+      } 
+      if(step>=64) {
+        break;
+      }
+    }
+    partRange=partRange>>1;
+  }
+  return 0;
+}
+
+int readNotes(char *line,int trig) {
   char *token;
   int partRange;
   int step0=1;
@@ -873,7 +965,6 @@ int readNotes(char *line) {
   }
 
   readExpression(line,&buff,sizeof(buffer));
-  //printf("expresion final %s\n",buffer);
   line=buffer;
   token=nextToken(&line);
   if(*token==0) return 0;
@@ -886,7 +977,7 @@ int readNotes(char *line) {
       partRange=origPartRange;
       for(int part=0; part<16; part++) {
         if(partRange&1) {
-          step[part]=readStepNotes(token,part,step[part]);
+          step[part]=readStepNotes(token,part,step[part],trig);
 	  if(step[part]>=64) {
 	    ok=0;
 	  }
@@ -894,15 +985,6 @@ int readNotes(char *line) {
             printError("Error in notes ",line);
             return -4;
           }
-	  /*
-  for (int i=0;i<64;i++) {
-    for(int n=0;n<4;n++) {
-  printf("%d ",dd.part[part].step[i].note[n]);
-
-  }
-  }
-  printf("\n");
-  */
         }
         partRange=partRange>>1;	
       }
@@ -915,6 +997,10 @@ int readName(char *line) {
   char *remain;
   char *name;
   name=readString(&line);
+  if(name==0) {
+    dd.name[0]=0;
+    return 0;
+  }
     for(int i=0;i<17;i++) {
       char c=name[i];
       if(c==0) {
@@ -1292,80 +1378,7 @@ int readTranspose(char *line) {
   }
   return 0;
 }
-//silence 'x'
-//4 silences 'X'
-//note 'o'
-//prol '_'
-//no note '.'
 
-void putSilence(int part, int step) {
-  dd.part[part].step[step].onOff=0;
-  /*
-  dd.part[part].step[step].note[0]=0;
-  dd.part[part].step[step].note[1]=0;
-  dd.part[part].step[step].note[2]=0;
-  dd.part[part].step[step].note[3]=0;
-  */
-  if(dd.part[part].step[step].gateTime>96) {
-	   dd.part[part].step[step].gateTime=96;
-  }
-}
-
-void putTie(int part, int step) {
-  step=(step-1)%64;
-  dd.part[part].step[step].gateTime=127;
-  step=(step+1)%64;
-  dd.part[part].step[step].onOff=1;
-}
-
-int putSymbolInPattern(int part, int step, char symbol) {
-    switch(symbol) {
-      case SILENCE: putSilence(part,step++);break;
-      case SILENCE4: putSilence(part,step++);
-                if(step<64) putSilence(part,step++);
-                if(step<64) putSilence(part,step++);
-                if(step<64) putSilence(part,step++);
-                break;
-      case NOTE: dd.part[part].step[step++].onOff=1 ;break;
-      case PROL: putTie(part,(step)%64);step++;break;
-      case   0: step=64; break;
-    }
-    return step;
-}
-
-int readTriggers(char *line) {
-  char *token;
-  int partRange;
-  int step0=1;
-  int step;
-  char buffer[MAX_LINE*2]; //just in case
-  char *buff=buffer;
-
-  partRange=readPart(&line);
-  if(partRange==-1) {
-    return -1;
-  }
-  step0=readStep0(&line);
-  if(step0==-1) {
-    return -2;
-  }
-  readExpression(line,&buff,sizeof(buffer));
-  line=buffer;
-  deleteSpaces(line);
-  for(int part=0;part<16;part++) {
-    if(partRange&1) {
-      step=step0-1;
-      for(int i=0;i<strlen(line);i++) {
-        step=putSymbolInPattern(part, step, line[i]);
-      } 
-      if(step>=64) {
-        break;
-      }
-    }
-    partRange=partRange>>1;
-  }
-  return 0;
-}
 
 int start(char *line) {
   sendRealtimeMessage(0xfb);
@@ -1731,7 +1744,9 @@ int readLine(char *line) {
   } else if(0==compare(command,"triggers")) {
      return readTriggers(line);
   } else if(0==compare(command,"notes")) {
-     return readNotes(line);
+     return readNotes(line,0);
+  } else if(0==compare(command,"notes+")) {
+     return readNotes(line,1);
   } else if(0==compare(command,"gateTime")) {
      return readGateTime(line);
   } else if(0==compare(command,"velocity")) {

@@ -37,7 +37,10 @@ triggers 1 @33  ((xo_xo  *2) xoxo ) *2 o * 8
 #D+= D sharp (- = flat)
 notes 1     A1 A1 . B    C^ . D .   D+ . Cv .   B . A .  . . . . C^ d e f  . . . . c d e f
 notes 1 @33      (((. C4 C . D) * 2) (. D+ . Cv) *2) *2  ( B A C^ d ) *8 
-
+#notes+ sets the triggers and the notes at the same time:
+#notes+ 1  C4___ . is equivalent to triggers 1 o___x and notes 1 C4 C C C .
+notes+ 1     A1_ . B    C^ . D .   D+ . Cv .   B . A .  . . . . C^ d e f  . . . . c d e f
+notes+ 1 @33      (((. C4_  . D) * 2) (. D+ . Cv) *2) *2  ( B A C^ d ) *8 
 #transpose 1 @1-6 -3
 
 
