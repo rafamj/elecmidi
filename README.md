@@ -43,3 +43,5 @@ Command line arguments:
 -d device  
 
 -c channel  (1-16)
+
+-s        (For the Electribe 2 sampler)

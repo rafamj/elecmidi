@@ -22,12 +22,12 @@ velocity 1 90
 velocity 1 @1,5,9,13 120
 
 #triggers for part 1 o=on x=off _=tie (gateTime==127) X=xxxx
-triggers 1   o_xo oxox oxox oxox   X oooo X  oooo
+steps 1   o_xo oxox oxox oxox   X oooo X  oooo
 #start at step 29
 #it is possible to multiply: oooo * 2  == oooo oooo
-triggers 1 @29 oooo * 2
+steps 1 @29 oooo * 2
 # ((xo_xo  *2) xoxo ) *2   == xo_xo xo_xo xoxo xo_xo xo_xo xoxo
-triggers 1 @33  ((xo_xo  *2) xoxo ) *2 o * 8 
+steps 1 @33  ((xo_xo  *2) xoxo ) *2 o * 8 
 
 #notes for part 1:
 #A5=A, octave 5. 
@@ -37,8 +37,8 @@ triggers 1 @33  ((xo_xo  *2) xoxo ) *2 o * 8
 #D+= D sharp (- = flat)
 notes 1     A1 A1 . B    C^ . D .   D+ . Cv .   B . A .  . . . . C^ d e f  . . . . c d e f
 notes 1 @33      (((. C4 C . D) * 2) (. D+ . Cv) *2) *2  ( B A C^ d ) *8 
-#notes+ sets the triggers and the notes at the same time:
-#notes+ 1  C4___ . is equivalent to triggers 1 o___x and notes 1 C4 C C C .
+#notes+ sets  steps, stepsTrigger and notes at the same time:
+#notes+ 1  C4___ . is equivalent to steps 1 o___x and notes 1 C4 C C C .
 notes+ 1     A1_ . B    C^ . D .   D+ . Cv .   B . A .  . . . . C^ d e f  . . . . c d e f
 notes+ 1 @33      (((. C4_  . D) * 2) (. D+ . Cv) *2) *2  ( B A C^ d ) *8 
 #transpose 1 @1-6 -3

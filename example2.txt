@@ -5,13 +5,13 @@ lastStep 1  16
 
 gateTime 1 70
 velocity 1 90
-triggers 1   oooo         oooo        o_xx   ooxx      ooxx  X  xoxo xoo_
+steps 1   oooo         oooo        o_xx   ooxx      ooxx  X  xoxo xoo_
 notes 1     a1 *2 c^ av   c^ g *2 bv   a *2 . .    g *2  . .      a *2 . .  . . . .   . f . f+  . g g+ *2 
 
-triggers 9  X X X X  X X X xoxoxoox
+steps 9  X X X X  X X X xoxoxoox
 notes 9     . . . .  . . . . . . . . . . . .   . . . . . . . . . . .   . c4 . c4 . c4 . . c4 
 
-triggers 10 X xox X oxxx  X   X xox X oxxx  X
+steps 10 X xox X oxxx  X   X xox X oxxx  X
 notes 10    . . . .  . c4 .    . . . .  . c4 . . .  . . . .  . . . .  . c4 .  . . . .     c4 . . .  . . . .
 
 mute 2-16 On
@@ -27,7 +27,7 @@ wait 1
 mute 9 Off
 write
 wait 1 
-triggers 9  oxxx  xxoo  xxoo  xxoo   X X X  xoxoxoox
+steps 9  oxxx  xxoo  xxoo  xxoo   X X X  xoxoxoox
 notes 9    c4 . . .     . .  c4 c  . . c c   . . . .   . . . .   . . . .  . c . c . c .  . c
 mute 10 Off
 write

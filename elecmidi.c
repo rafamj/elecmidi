@@ -21,6 +21,7 @@ struct DataDumpType auxData;
 char* device =  "/dev/dmmidi1" ;
 int channel=0;
 int octave=4;
+int sampler=0; //0 synth 1 sampler
 FILE *midiFile;
 int lineNumber=0;
 
@@ -274,8 +275,14 @@ char *note2string(int noteNumber,char *buffer) {
 }
 
 char *printTableElement(char *table[], int tableLenght, int i) {
-  if(i<0 || i>= tableLenght) return "XXXXXX";
-  else return table[i];
+  static char buffer[10];
+
+  if(i<0) return "XXXXXX";
+  if(i>= tableLenght) { //in case the osc is not in the table
+    sprintf(buffer,"%d",i);
+    return buffer;
+  }
+  return table[i];
 }
 
 //prints gateTime and velocity
@@ -357,7 +364,11 @@ int printPart(int part) {
      printf("padVelocity %d \"%s\"\n",part+1,printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.part[part].padVelocity));
      printf("scaleMode %d \"%s\"\n",part+1,printTableElement(onOffTable,sizeof(onOffTable)/sizeof(onOffTable[0]),dd.part[part].scaleMode));
      printf("partPriority %d \"%s\"\n",part+1,printTableElement(partPriorityTable,sizeof(partPriorityTable)/sizeof(partPriorityTable[0]),dd.part[part].partPriority));
-     printf("oscType %d \"%s\"\n",part+1,printTableElement(oscTypeTable,sizeof(oscTypeTable)/sizeof(oscTypeTable[0]),dd.part[part].oscTypel+256*dd.part[part].oscTypeh));
+     if(sampler) {
+       printf("oscType %d \"%s\"\n",part+1,printTableElement(oscTypeTableSampler,sizeof(oscTypeTableSampler)/sizeof(oscTypeTableSampler[0]),dd.part[part].oscTypel+256*dd.part[part].oscTypeh));
+     } else {
+       printf("oscType %d \"%s\"\n",part+1,printTableElement(oscTypeTable,sizeof(oscTypeTable)/sizeof(oscTypeTable[0]),dd.part[part].oscTypel+256*dd.part[part].oscTypeh));
+     }
      printf("oscEdit %d %d\n",part+1,dd.part[part].oscEdit);
      printf("filterType %d \"%s\"\n",part+1,printTableElement(filterTypeTable,sizeof(filterTypeTable)/sizeof(filterTypeTable[0]),dd.part[part].filterType));
      printf("filterCutoff %d %d\n",part+1,dd.part[part].filterCutoff);
@@ -379,7 +390,7 @@ int printPart(int part) {
      printf("IFXEdit %d %d\n",part+1,dd.part[part].IFXEdit);
      printf("oscPitch %d %d\n",part+1,(signed char)dd.part[part].oscPitch);
      printf("oscGlide %d %d\n",part+1,dd.part[part].oscGlide);
-     printf("triggers %d ",part+1);
+     printf("steps        %d ",part+1);
      for(int s=0; s<64; s++) {
        if(s%4==0) printf(" ");
        if(s%16==0) printf("  ");
@@ -394,6 +405,18 @@ int printPart(int part) {
        }
      }
      printf("\n");
+     printf("stepsTrigger %d ",part+1);
+     for(int s=0; s<64; s++) {
+       if(s%4==0) printf(" ");
+       if(s%16==0) printf("  ");
+       if (dd.part[part].step[s].triggerOnOff==1) {
+           printf("%c",NOTE);
+       } else {
+         printf("%c",SILENCE);
+       }
+     }
+     printf("\n");
+
 
      //printf("notes %d     ",part+1);
      for(int s=0; s<64; s++) {
@@ -834,14 +857,19 @@ int readStepNotes(char *notes,int part,int step, int trig){
   }
   if(trig) {
     dd.part[part].step[step].onOff=0;
+    dd.part[part].step[step].triggerOnOff=0;
     for(int n=0; n<4;n++) {
-      if(dd.part[part].step[step].note[n]!=0) dd.part[part].step[step].onOff=1;
+      if(dd.part[part].step[step].note[n]!=0) {
+        dd.part[part].step[step].onOff=1;
+        dd.part[part].step[step].triggerOnOff=1;
+      }
     }
   }
   if(*notes==PROL && trig) {
       step++;
       while(*notes==PROL) {
-        for(int n=0;n<4;n++) dd.part[part].step[step].note[n]=dd.part[part].step[step-1].note[n];
+        for(int n=0;n<4;n++) dd.part[part].step[step].note[n]=dd.part[part].step[(step-1)%64].note[n];
+        dd.part[part].step[step].triggerOnOff=0;
         step=putSymbolInPattern(part,step,PROL);
         notes++;
       }
@@ -913,7 +941,7 @@ int readExpression(char *expr, char **buff,int len) {
    return len;
 }
 
-int readTriggers(char *line) {
+int readTriggers(char *line, int type) { //type 0 onOff 1 triggerOnOff
   char *token;
   int partRange;
   int step0=1;
@@ -936,7 +964,17 @@ int readTriggers(char *line) {
     if(partRange&1) {
       step=step0-1;
       for(int i=0;i<strlen(line);i++) {
-        step=putSymbolInPattern(part, step, line[i]);
+        if(type==0) {
+          step=putSymbolInPattern(part, step, line[i]);
+	} else {
+	  if(line[i]==NOTE) {
+            dd.part[part].step[step++].triggerOnOff=1;
+	  } else if(line[i]==SILENCE) {
+            dd.part[part].step[step++].triggerOnOff=0;
+          } else {
+	    printError("Error, no valid character",line);
+	  }
+	}
       } 
       if(step>=64) {
         break;
@@ -1504,7 +1542,11 @@ int oscType(char *line) {
   if(partRange==-1) {
     return -1;
   }
-  osct=readTable(&line,oscTypeTable,sizeof(oscTypeTable)/sizeof(oscTypeTable[0]));
+  if(sampler) {
+    osct=readTable(&line,oscTypeTableSampler,sizeof(oscTypeTableSampler)/sizeof(oscTypeTableSampler[0]));
+  } else {
+    osct=readTable(&line,oscTypeTable,sizeof(oscTypeTable)/sizeof(oscTypeTable[0]));
+  }
   for(int part=0;part<16;part++) {
     if(partRange & 1) {
       dd.part[part].oscTypel=osct%256;
@@ -1741,8 +1783,10 @@ int readLine(char *line) {
      return readIntegerPart(line,-63,63,&dd.part[0].oscPitch);
   } else if(0==compare(command,"oscGlide")) {
      return readIntegerPart(line,0,127,&dd.part[0].oscGlide);
-  } else if(0==compare(command,"triggers")) {
-     return readTriggers(line);
+  } else if(0==compare(command,"steps")) {
+     return readTriggers(line,0);
+  } else if(0==compare(command,"stepsTrigger")) {
+     return readTriggers(line,1);
   } else if(0==compare(command,"notes")) {
      return readNotes(line,0);
   } else if(0==compare(command,"notes+")) {
@@ -1809,6 +1853,9 @@ int readArguments(int argc, char *argv[]) {
       }
 
       n+=2;
+    } else if(strcmp(argv[n],"-s")==0) {
+      sampler=1;
+      n++;
     } else {
       printError("Wrong argument ",argv[n]);
       return -1;
