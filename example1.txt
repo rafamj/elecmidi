@@ -48,7 +48,7 @@ notes+ 1 @33      (((. C4_  . D) * 2) (. D+ . Cv) *2) *2  ( B A C^ d ) *8
 gateTime 2-3 90
 velocity 2-3 80
 
-triggers 2-3 o___ X o___ X         X X oooo  oooo 
+steps 2-3 o___ X o___ X         X X oooo  oooo 
 
 #d3af^, e3bg^ are chords ; it is also possible a.b (the second note is 0)
 # notes can also be multiplied 
@@ -61,10 +61,10 @@ transpose 2     1
 
 gateTime 4 90
 velocity 4 80
-triggers 4      ____ ____ ____ ____ 
-triggers 4 @17 ____ ____ ____ ____ 
-triggers 4  @33 ____ ____ ____ ____ 
-triggers 4  @49 ____ ____ ____ ____ 
+steps 4      ____ ____ ____ ____ 
+steps 4 @17 ____ ____ ____ ____ 
+steps 4  @33 ____ ____ ____ ____ 
+steps 4  @49 ____ ____ ____ ____ 
 
 notes 4       d2f^ *16     e2g^ *16
 notes 4 @33   d2f^  *15     e2g^ *15

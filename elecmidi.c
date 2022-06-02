@@ -250,6 +250,7 @@ int readPart(char **line){
   return range & 0xffff;
 }
 
+
 char *note2string(int noteNumber,char *buffer) {
   int octave;
   int note;
@@ -810,6 +811,8 @@ int readStepNotes(char *notes,int part,int step, int trig){
   int note;
   int alt;
   char c;
+  int nextStep=step;
+  
   while(n<4) {
     alt=0;
     note=toupper(*notes);
@@ -819,6 +822,7 @@ int readStepNotes(char *notes,int part,int step, int trig){
        }
        break;
     }
+    nextStep=step+1;
     if((note<'A' || note>'G') && note!=NONOTE) {
       printError("Error reading note",notes);
     }
@@ -865,16 +869,14 @@ int readStepNotes(char *notes,int part,int step, int trig){
       }
     }
   }
+  step=nextStep;
   if(*notes==PROL && trig) {
-      step++;
       while(*notes==PROL) {
         for(int n=0;n<4;n++) dd.part[part].step[step].note[n]=dd.part[part].step[(step-1)%64].note[n];
         dd.part[part].step[step].triggerOnOff=0;
         step=putSymbolInPattern(part,step,PROL);
         notes++;
       }
-  } else {
-    step++;
   }
   return step;
 }
