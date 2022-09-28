@@ -8,7 +8,7 @@
 #include "elecmidi.h"
 
 //#define PRINT_RESERVED 
-//#define DELAY 5000
+#define DELAY  16384
 #define SILENCE 'x'
 #define NOTE 'o'
 #define SILENCE4 'X'
@@ -85,6 +85,10 @@ void sendCommand(unsigned char *command, long int cl, unsigned char *buffer, lon
    openMidi("w");
    
    for(int i=0;i<cl;i++) {
+     if(i%512==0) {
+       usleep(DELAY); 
+       //usleep(1); 
+     }
      sendMidiChar(command[i]);
    }
    closeMidi();
